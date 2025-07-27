@@ -174,6 +174,22 @@
   font-size: 12px;
 }
 
+.pause-button {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-size: 24px;
+    cursor: pointer;
+    color: white;
+    z-index: 10;
+    opacity: 0.3;
+    transition: opacity 0.3s ease;
+}
+
+.pause-button:hover {
+    opacity: 1;
+}
+
 .dots-container {
   position: absolute;
   top: calc(50% + 18vh);

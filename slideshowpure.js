@@ -24,6 +24,7 @@ const CONFIG = {
   maxItems: 500,
   preloadCount: 3,
   fadeTransitionDuration: 500,
+  pluginId: "08f615ea-2107-4f04-89cc-091035f54448",
 };
 
 // State management
@@ -40,6 +41,7 @@ const STATE = {
   slideshow: {
     hasInitialized: false,
     isTransitioning: false,
+    isPaused: false,
     currentSlideIndex: 0,
     focusedSlide: null,
     containerFocused: false,
@@ -49,6 +51,7 @@ const STATE = {
     createdSlides: {},
     totalItems: 0,
     isLoading: false,
+    slideshowIntervalTime: 7000,
   },
 };
 
@@ -139,9 +142,15 @@ const initJellyfinData = (callback) => {
       serverId: apiClient._serverInfo.Id || "Not Found",
       serverAddress: apiClient._serverAddress || "Not Found",
     };
-    if (callback && typeof callback === "function") {
-      callback();
-    }
+
+    // Fetch and set the slideshow interval from the plugin configuration
+    window.ApiClient.getPluginConfiguration(CONFIG.pluginId).then(config => {
+        STATE.slideshow.slideshowIntervalTime = (config.SlideshowInterval || 7) * 1000;
+        if (callback && typeof callback === "function") {
+          callback();
+        }
+    });
+
   } catch (error) {
     console.error("Error initializing Jellyfin data:", error);
     setTimeout(() => initJellyfinData(callback), CONFIG.retryInterval);
@@ -249,6 +258,7 @@ const resetSlideshowState = () => {
 
   STATE.slideshow.hasInitialized = false;
   STATE.slideshow.isTransitioning = false;
+  STATE.slideshow.isPaused = false;
   STATE.slideshow.currentSlideIndex = 0;
   STATE.slideshow.focusedSlide = null;
   STATE.slideshow.containerFocused = false;
@@ -738,7 +748,7 @@ const VisibilityObserver = {
     container.style.display = isVisible ? "block" : "none";
 
     if (isVisible) {
-      if (STATE.slideshow.slideInterval) {
+      if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
         STATE.slideshow.slideInterval.start();
       }
     } else {
@@ -1259,7 +1269,7 @@ const SlideshowManager = {
       this.preloadAdjacentSlides(index);
       this.updateDots();
 
-      if (STATE.slideshow.slideInterval) {
+      if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
         STATE.slideshow.slideInterval.restart();
       }
 
@@ -1363,6 +1373,18 @@ const SlideshowManager = {
     });
   },
 
+  togglePause() {
+      STATE.slideshow.isPaused = !STATE.slideshow.isPaused;
+      const pauseButton = document.querySelector('.pause-button');
+      if (STATE.slideshow.isPaused) {
+          STATE.slideshow.slideInterval.stop();
+          pauseButton.innerHTML = '<i class="material-icons">play_arrow</i>';
+      } else {
+          STATE.slideshow.slideInterval.start();
+          pauseButton.innerHTML = '<i class="material-icons">pause</i>';
+      }
+  },
+
   /**
    * Initializes touch events for swiping
    */
@@ -1436,6 +1458,11 @@ const SlideshowManager = {
           e.preventDefault();
           break;
 
+        case " ": // Space bar
+            this.togglePause();
+            e.preventDefault();
+            break;
+
         case "Enter":
           focusElement.click();
           e.preventDefault();
@@ -1477,8 +1504,10 @@ const SlideshowManager = {
       await this.updateCurrentSlide(0);
 
       STATE.slideshow.slideInterval = new SlideTimer(() => {
-        this.nextSlide();
-      }, CONFIG.shuffleInterval);
+        if (!STATE.slideshow.isPaused) {
+            this.nextSlide();
+        }
+      }, STATE.slideshow.slideshowIntervalTime);
     } catch (error) {
       console.error("Error loading slideshow data:", error);
     } finally {
@@ -1525,8 +1554,21 @@ const initArrowNavigation = () => {
     },
   });
 
+  const pauseButton = SlideUtils.createElement("div", {
+      className: "pause-button",
+      innerHTML: '<i class="material-icons">pause</i>',
+      tabIndex: "0",
+      onclick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          SlideshowManager.togglePause();
+      }
+  });
+
   container.appendChild(leftArrow);
   container.appendChild(rightArrow);
+  container.appendChild(pauseButton);
+
 
   const showArrows = () => {
     leftArrow.style.display = "block";
