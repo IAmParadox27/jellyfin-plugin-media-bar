@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using Jellyfin.Extensions;
+using Jellyfin.Plugin.MediaBar.Configuration;
 using Jellyfin.Plugin.MediaBar.Helpers;
 using Jellyfin.Plugin.MediaBar.Model;
 using MediaBrowser.Controller.Entities;
@@ -48,6 +49,12 @@ namespace Jellyfin.Plugin.MediaBar.Controllers
             }
             
             return Content(content, "text/plain");
+        }
+
+        [HttpGet("WebConfig")]
+        public ActionResult<WebConfig> GetWebConfig()
+        {
+            return Ok(MediaBarPlugin.Instance.Configuration.WebConfig);
         }
     }
 }
