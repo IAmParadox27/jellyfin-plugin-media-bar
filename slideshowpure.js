@@ -1208,6 +1208,7 @@ const SlideshowManager = {
 
     STATE.slideshow.isTransitioning = true;
 
+    let previousVisibleSlide;
     try {
       const container = SlideUtils.getOrCreateSlidesContainer();
       const totalItems = STATE.slideshow.totalItems;
@@ -1230,7 +1231,7 @@ const SlideshowManager = {
         }
       }
 
-      const previousVisibleSlide = container.querySelector(".slide.active");
+      previousVisibleSlide = container.querySelector(".slide.active");
 
       if (previousVisibleSlide) {
         previousVisibleSlide.classList.remove("active");
@@ -1272,6 +1273,13 @@ const SlideshowManager = {
     } finally {
       setTimeout(() => {
         STATE.slideshow.isTransitioning = false;
+
+        if (previousVisibleSlide) {
+          const prevBackdrop = previousVisibleSlide.querySelector(".backdrop");
+          const prevLogo = previousVisibleSlide.querySelector(".logo");
+          if (prevBackdrop) prevBackdrop.classList.remove("animate");
+          if (prevLogo) prevLogo.classList.remove("animate");
+        }
       }, CONFIG.fadeTransitionDuration);
     }
   },
