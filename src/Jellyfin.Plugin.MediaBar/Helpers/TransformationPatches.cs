@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using Jellyfin.Extensions;
+using Jellyfin.Plugin.MediaBar.Attributes;
 using Jellyfin.Plugin.MediaBar.Configuration;
 using Jellyfin.Plugin.MediaBar.Model;
 using MediaBrowser.Controller.Entities;
@@ -97,6 +98,13 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             if (MediaBarPlugin.Instance.Configuration.VersionString == "latest")
             {
                 MediaBarPlugin.Instance.Configuration.VersionString = "main";
+            }
+
+            if (MediaBarPlugin.Instance.Configuration.VersionString == "main" &&
+                JellyfinVersionAttribute.GetVersion() == "10.11.0")
+            {
+                // Force 10.11 branch instead of main for now
+                MediaBarPlugin.Instance.Configuration.VersionString = "10.11";
             }
             
             string importedHtml = reader
