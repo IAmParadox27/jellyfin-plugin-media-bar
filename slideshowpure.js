@@ -170,7 +170,7 @@ const initLoadingScreen = () => {
   loadingDiv.innerHTML = `
     <div class="loader-content">
       <h1>
-        <img src="/web/assets/img/banner-light.png" alt="Server Logo">
+        <img src="/web/banner-light.b113d4d1c6c07fcb73f0.png" alt="Server Logo">
       </h1>
       <div class="progress-container">
         <div class="progress-bar" id="progress-bar"></div>
