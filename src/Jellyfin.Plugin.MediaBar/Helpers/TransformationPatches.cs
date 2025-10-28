@@ -101,7 +101,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             }
 
             if (MediaBarPlugin.Instance.Configuration.VersionString == "main" &&
-                JellyfinVersionAttribute.GetVersion() == "10.11.0")
+                JellyfinVersionAttribute.GetVersion() == "10.11")
             {
                 // Force 10.11 branch instead of main for now
                 MediaBarPlugin.Instance.Configuration.VersionString = "10.11";
