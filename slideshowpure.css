@@ -1,11 +1,12 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.0
+ * Jellyfin Slideshow by M0RPH3US v3.0.4
  */
 
 @import url(https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&display=swap);
 
 .backdrop.animate {
-  animation: frostedGlass 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+  animation:
+    frostedGlass 1.2s cubic-bezier(0.4, 0, 0.2, 1),
     kenBurnsZoomIn 10s ease-out forwards;
 }
 
@@ -75,7 +76,7 @@
   align-items: center;
 }
 
-.bar-loading h1 img {
+.bar-loading h1 div {
   width: 250px;
   max-height: 250px;
   display: block;
@@ -117,13 +118,17 @@
 .backdrop.low-quality {
   filter: blur(0.5px);
   transform: scale(1.01);
-  transition: filter 0.3s ease-in-out, transform 0.3s ease-in-out;
+  transition:
+    filter 0.3s ease-in-out,
+    transform 0.3s ease-in-out;
 }
 
 .backdrop.high-quality {
   filter: blur(0);
   transform: scale(1);
-  transition: filter 0.3s ease-in-out, transform 0.3s ease-in-out;
+  transition:
+    filter 0.3s ease-in-out,
+    transform 0.3s ease-in-out;
 }
 
 .logo.low-quality {
@@ -174,6 +179,42 @@
   font-size: 12px;
 }
 
+.pause-button {
+  position: absolute;
+  top: 5rem;
+  right: 0.8rem;
+  cursor: pointer;
+  color: white;
+  z-index: 10;
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.pause-button i {
+  font-size: 1.5rem;
+}
+
+.pause-button:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 1599px) {
+  .pause-button {
+    top: 8rem;
+  }
+
+  .pause-button i {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .pause-button i {
+    font-size: 2.5rem;
+  }
+}
+
 .dots-container {
   position: absolute;
   top: calc(50% + 18vh);
@@ -195,7 +236,8 @@
   background-color: #cecece99;
   border-radius: 50%;
   transform-origin: center;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+  transition:
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
     background-color 0.5s ease-in-out;
 }
 
@@ -330,6 +372,7 @@
   width: auto;
   object-fit: contain;
   filter: brightness(1.5);
+  font-size: 4rem;
 }
 
 .plot-container {
@@ -356,6 +399,10 @@
 }
 
 .genre {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
   position: absolute;
   top: calc(50% + 4vh);
   left: 4vw;
@@ -363,6 +410,7 @@
   color: #fff;
   font-family: "Archivo Narrow", sans-serif;
   z-index: 5;
+  flex-wrap: wrap;
 }
 
 .button-container {
@@ -390,6 +438,7 @@
   font-weight: 700;
   gap: 6px;
   -webkit-tap-highlight-color: #fff0;
+  border-radius: 8px;
 }
 
 .detail-button {
@@ -471,63 +520,54 @@
   font-weight: 500;
 }
 
-.rating-value {
+.misc-info {
   font-family: "Archivo Narrow", sans-serif;
   display: flex;
   align-items: center;
   z-index: 5;
   position: relative;
+  gap: 10px;
 }
 
 .runTime {
   font-family: "Archivo Narrow", sans-serif;
   display: flex;
   align-items: center;
-  margin-left: 5px;
-  margin-right: 5px;
   align-content: center;
   justify-content: center;
   flex-wrap: wrap;
   font-weight: 500;
 }
 
-.tomato-rating {
-  display: flex;
-  align-items: center;
-  margin-left: 0;
+/* Star Icon Styling */
+.community-rating-star {
+  color: #f2b01e;
+  font-size: 1.4em;
+  height: auto !important;
+  margin-right: 0.125em;
+  width: auto !important;
 }
 
-.imdb-logo {
-  margin-right: 1px;
+.star-rating-container {
   display: flex;
-  flex-wrap: wrap;
-  align-content: center;
-  justify-content: center;
   align-items: center;
 }
 
-.tomato-logo {
-  flex-wrap: wrap;
-  align-content: center;
-  display: flex;
-  justify-content: center;
+/* Rotten Tomatoes Critic Rating Styles */
+
+.critic-rating {
+  -webkit-align-items: center;
   align-items: center;
-  margin-left: 5px;
+  display: flex;
+  min-height: 1.2em;
+  gap: 0.25em;
 }
 
-.critic-logo {
-  margin-right: 5px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: center;
-  justify-content: center;
-}
+/**/
 
 .age-rating {
   display: flex;
   align-items: center;
-  margin-left: 5px;
-  margin-right: 5px;
   border-radius: 5px;
   background: rgb(255 255 255 / 0.8);
   color: #000;
@@ -542,16 +582,12 @@
   font-weight: 500;
   display: flex;
   align-items: center;
-  margin-left: 5px;
-  margin-right: 5px;
   flex-wrap: wrap;
   align-content: center;
   justify-content: center;
 }
 
 .separator-icon {
-  margin-left: 5px;
-  margin-right: 5px;
   font-size: 10px;
   color: aquamarine;
 }
