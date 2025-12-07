@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.4
+ * Jellyfin Slideshow by M0RPH3US v3.0.5
  */
 
 //Core Module Configuration
@@ -769,6 +769,59 @@ const VisibilityObserver = {
  */
 const SlideCreator = {
   /**
+   * Builds a tag-based image URL for cache-friendly image requests
+   * @param {Object} item - Item data containing ImageTags
+   * @param {string} imageType - Image type (Backdrop, Logo, Primary, etc.)
+   * @param {number} [index] - Image index (for Backdrop, Primary, etc.)
+   * @param {string} serverAddress - Server address
+   * @param {number} [quality] - Image quality (0-100). If tag is available, both tag and quality are used.
+   * @returns {string} Image URL with tag parameter (and quality if tag available), or quality-only fallback
+   */
+  buildImageUrl(item, imageType, index, serverAddress, quality) {
+    const itemId = item.Id;
+    let tag = null;
+
+    // Handle Backdrop images
+    if (imageType === "Backdrop") {
+      // Check BackdropImageTags array first
+      if (item.BackdropImageTags && Array.isArray(item.BackdropImageTags) && item.BackdropImageTags.length > 0) {
+        const backdropIndex = index !== undefined ? index : 0;
+        if (backdropIndex < item.BackdropImageTags.length) {
+          tag = item.BackdropImageTags[backdropIndex];
+        }
+      }
+      // Fallback to ImageTags.Backdrop if BackdropImageTags not available
+      if (!tag && item.ImageTags && item.ImageTags.Backdrop) {
+        tag = item.ImageTags.Backdrop;
+      }
+    } else {
+      // For other image types (Logo, Primary, etc.), use ImageTags
+      if (item.ImageTags && item.ImageTags[imageType]) {
+        tag = item.ImageTags[imageType];
+      }
+    }
+
+    // Build base URL path
+    let baseUrl;
+    if (index !== undefined) {
+      baseUrl = `${serverAddress}/Items/${itemId}/Images/${imageType}/${index}`;
+    } else {
+      baseUrl = `${serverAddress}/Items/${itemId}/Images/${imageType}`;
+    }
+
+    // Build URL with tag and quality if tag is available, otherwise quality-only fallback
+    if (tag) {
+      // Use both tag and quality for cacheable, quality-controlled images
+      const qualityParam = quality !== undefined ? `&quality=${quality}` : '';
+      return `${baseUrl}?tag=${tag}${qualityParam}`;
+    } else {
+      // Fallback to quality-only URL if no tag is available
+      const qualityParam = quality !== undefined ? quality : 90;
+      return `${baseUrl}?quality=${qualityParam}`;
+    }
+  },
+
+  /**
    * Creates a slide element for an item
    * @param {Object} item - Item data
    * @param {string} title - Title type (Movie/TV Show)
@@ -793,7 +846,7 @@ const SlideCreator = {
 
     const backdrop = SlideUtils.createElement("img", {
       className: "backdrop high-quality",
-      src: `${serverAddress}/Items/${itemId}/Images/Backdrop/0?quality=60`,
+      src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
       alt: "Backdrop",
       loading: "eager",
     });
@@ -809,7 +862,7 @@ const SlideCreator = {
 
     const logo = SlideUtils.createElement("img", {
       className: "logo high-quality",
-      src: `${serverAddress}/Items/${itemId}/Images/Logo?quality=40`,
+      src: this.buildImageUrl(item, "Logo", undefined, serverAddress, 40),
       alt: item.Name,
       loading: "eager",
     });
