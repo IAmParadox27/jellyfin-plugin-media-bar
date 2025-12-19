@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.5
+ * Jellyfin Slideshow by M0RPH3US v3.0.6
  */
 
 //Core Module Configuration
@@ -143,6 +143,19 @@ const initJellyfinData = (callback) => {
   } catch (error) {
     console.error("Error initializing Jellyfin data:", error);
     setTimeout(() => initJellyfinData(callback), CONFIG.retryInterval);
+  }
+};
+
+/**
+ * Initializes localization by loading translation chunks
+ */
+const initLocalization = async () => {
+  try {
+    const locale = await LocalizationUtils.getCurrentLocale();
+    await LocalizationUtils.loadTranslations(locale);
+    console.log("✅ Localization initialized");
+  } catch (error) {
+    console.error("Error initializing localization:", error);
   }
 };
 
@@ -313,8 +326,9 @@ const waitForApiClientAndInitialize = () => {
       clearInterval(window.slideshowCheckInterval);
 
       if (!STATE.slideshow.hasInitialized) {
-        initJellyfinData(() => {
+        initJellyfinData(async () => {
           console.log("✅ Jellyfin API client initialized successfully");
+          await initLocalization();
           slidesInit();
         });
       } else {
@@ -451,6 +465,197 @@ const SlideUtils = {
     });
     return loadingIndicator;
   },
+};
+
+/**
+ * Localization utilities for fetching and using Jellyfin translations
+ */
+const LocalizationUtils = {
+  translations: {},
+  locale: null,
+  isLoading: {},
+  cachedLocale: null,
+  chunkUrlCache: {},
+
+  /**
+   * Gets the current locale from user preference, server config, or HTML tag
+   * @returns {Promise<string>} Locale code (e.g., "de", "en-us")
+   */
+  async getCurrentLocale() {
+    if (this.cachedLocale) {
+      return this.cachedLocale;
+    }
+
+    let locale = null;
+
+    if (window.ApiClient && STATE.jellyfinData?.accessToken) {
+      try {
+        const userId = window.ApiClient.getCurrentUserId();
+        if (userId) {
+          const userUrl = window.ApiClient.getUrl(`Users/${userId}`);
+          const userResponse = await fetch(userUrl, {
+            headers: ApiUtils.getAuthHeaders(),
+          });
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            if (userData.Configuration?.AudioLanguagePreference) {
+              locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Could not fetch user language preference:", error);
+      }
+    }
+
+    if (!locale && window.ApiClient && STATE.jellyfinData?.accessToken) {
+      try {
+        const configUrl = window.ApiClient.getUrl('System/Configuration');
+        const configResponse = await fetch(configUrl, {
+          headers: ApiUtils.getAuthHeaders(),
+        });
+        if (configResponse.ok) {
+          const configData = await configResponse.json();
+          if (configData.PreferredMetadataLanguage) {
+            locale = configData.PreferredMetadataLanguage.toLowerCase();
+            if (configData.MetadataCountryCode) {
+              locale = `${locale}-${configData.MetadataCountryCode.toLowerCase()}`;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Could not fetch server language preference:", error);
+      }
+    }
+
+    if (!locale) {
+      const langAttr = document.documentElement.getAttribute("lang");
+      if (langAttr) {
+        locale = langAttr.toLowerCase();
+      }
+    }
+
+    if (!locale) {
+      const navLang = navigator.language || navigator.userLanguage;
+      locale = navLang ? navLang.toLowerCase() : "en-us";
+    }
+
+    this.cachedLocale = locale;
+    return locale;
+  },
+
+  /**
+   * Finds the translation chunk URL from performance entries
+   * @param {string} locale - Locale code
+   * @returns {string|null} URL to translation chunk or null
+   */
+  findTranslationChunkUrl(locale) {
+    const localePrefix = locale.split('-')[0];
+
+    if (this.chunkUrlCache[localePrefix]) {
+      return this.chunkUrlCache[localePrefix];
+    }
+
+    if (window.performance && window.performance.getEntriesByType) {
+      try {
+        const resources = window.performance.getEntriesByType('resource');
+        for (const resource of resources) {
+          const url = resource.name || resource.url;
+          if (url && url.includes(`${localePrefix}-json`) && url.includes('.chunk.js')) {
+            this.chunkUrlCache[localePrefix] = url;
+            return url;
+          }
+        }
+      } catch (e) {
+        console.warn("Error checking performance entries:", e);
+      }
+    }
+
+    this.chunkUrlCache[localePrefix] = null;
+    return null;
+  },
+
+  /**
+   * Fetches and loads translations from the chunk JSON
+   * @param {string} locale - Locale code
+   * @returns {Promise<void>}
+   */
+  async loadTranslations(locale) {
+    if (this.translations[locale]) return;
+    if (this.isLoading[locale]) {
+      await this.isLoading[locale];
+      return;
+    }
+
+    const loadPromise = (async () => {
+      try {
+        const chunkUrl = this.findTranslationChunkUrl(locale);
+        if (!chunkUrl) {
+          return;
+        }
+
+        const response = await fetch(chunkUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch translations: ${response.statusText}`);
+        }
+
+        const chunkText = await response.text();
+        
+        let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
+        if (jsonMatch) {
+          let jsonString = jsonMatch[1]
+            .replace(/\\"/g, '"')
+            .replace(/\\n/g, '\n')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\'/g, "'");
+          try {
+            this.translations[locale] = JSON.parse(jsonString);
+            return;
+          } catch (e) {
+            // Try direct extraction
+          }
+        }
+        
+        const jsonStart = chunkText.indexOf('{');
+        const jsonEnd = chunkText.lastIndexOf('}') + 1;
+        if (jsonStart !== -1 && jsonEnd > jsonStart) {
+          const jsonString = chunkText.substring(jsonStart, jsonEnd);
+          try {
+            this.translations[locale] = JSON.parse(jsonString);
+          } catch (e) {
+            console.error("Failed to parse JSON from chunk:", e);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading translations:", error);
+      } finally {
+        delete this.isLoading[locale];
+      }
+    })();
+
+    this.isLoading[locale] = loadPromise;
+    await loadPromise;
+  },
+
+  /**
+   * Gets a localized string (synchronous - translations must be loaded first)
+   * @param {string} key - Localization key (e.g., "EndsAtValue", "Play")
+   * @param {string} fallback - Fallback English string
+   * @param {...any} args - Optional arguments for placeholders (e.g., {0}, {1})
+   * @returns {string} Localized string or fallback
+   */
+  getLocalizedString(key, fallback, ...args) {
+    const locale = this.cachedLocale || 'en-us';
+    let translated = this.translations[locale]?.[key] || fallback;
+
+    if (args.length > 0) {
+      for (let i = 0; i < args.length; i++) {
+        translated = translated.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
+      }
+    }
+
+    return translated;
+  }
 };
 
 /**
@@ -847,7 +1052,7 @@ const SlideCreator = {
     const backdrop = SlideUtils.createElement("img", {
       className: "backdrop high-quality",
       src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
-      alt: "Backdrop",
+      alt: LocalizationUtils.getLocalizedString('Backdrop', 'Backdrop'),
       loading: "eager",
     });
 
@@ -1003,14 +1208,16 @@ const SlideCreator = {
         className: "runTime",
       });
       if (seasonCount) {
-        container.innerHTML = `${seasonCount} Season${seasonCount > 1 ? "s" : ""}`;
+        const seasonText = seasonCount <= 1 ? LocalizationUtils.getLocalizedString('Season', 'Season') : LocalizationUtils.getLocalizedString('TypeOptionPluralSeason', 'Seasons');
+        container.innerHTML = `${seasonCount} ${seasonText}`;
       } else {
         const milliseconds = runtime / 10000;
         const currentTime = new Date();
         const endTime = new Date(currentTime.getTime() + milliseconds);
         const options = { hour: "2-digit", minute: "2-digit", hour12: false };
         const formattedEndTime = endTime.toLocaleTimeString([], options);
-        container.innerText = `Ends at ${formattedEndTime}`;
+        const endsAtText = LocalizationUtils.getLocalizedString('EndsAtValue', 'Ends at {0}', formattedEndTime);
+        container.innerText = endsAtText;
       }
       miscInfo.appendChild(container);
     }
@@ -1024,10 +1231,11 @@ const SlideCreator = {
    * @returns {HTMLElement} Play button element
    */
   createPlayButton(itemId) {
+    const playText = LocalizationUtils.getLocalizedString('Play', 'Play');
     return SlideUtils.createElement("button", {
       className: "detailButton btnPlay play-button",
       innerHTML: `
-      <span class="play-text">Play</span>
+      <span class="play-text">${playText}</span>
     `,
       tabIndex: "0",
       onclick: (e) => {
@@ -1376,13 +1584,15 @@ const SlideshowManager = {
     if (STATE.slideshow.isPaused) {
       STATE.slideshow.slideInterval.stop();
       pauseButton.innerHTML = '<i class="material-icons">play_arrow</i>';
-      pauseButton.setAttribute("aria-label", "Play slideshow");
-      pauseButton.setAttribute("title", "Play slideshow");
+      const playLabel = LocalizationUtils.getLocalizedString('Play', 'Play');
+      pauseButton.setAttribute("aria-label", playLabel);
+      pauseButton.setAttribute("title", playLabel);
     } else {
       STATE.slideshow.slideInterval.start();
       pauseButton.innerHTML = '<i class="material-icons">pause</i>';
-      pauseButton.setAttribute("aria-label", "Pause slideshow");
-      pauseButton.setAttribute("title", "Pause slideshow");
+      const pauseLabel = LocalizationUtils.getLocalizedString('ButtonPause', 'Pause');
+      pauseButton.setAttribute("aria-label", pauseLabel);
+      pauseButton.setAttribute("title", pauseLabel);
     }
   },
 
@@ -1559,8 +1769,8 @@ const initArrowNavigation = () => {
     className: "pause-button",
     innerHTML: '<i class="material-icons">pause</i>',
     tabIndex: "0",
-    "aria-label": "Pause slideshow",
-    title: "Pause slideshow",
+    "aria-label": LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
+    title: LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
     onclick: (e) => {
       e.preventDefault();
       e.stopPropagation();
