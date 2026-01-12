@@ -488,7 +488,7 @@ const LocalizationUtils = {
 
     let locale = null;
 
-    if (window.ApiClient && STATE.jellyfinData?.accessToken) {
+    if (window.ApiClient && STATE.jellyfinData && STATE.jellyfinData.accessToken) {
       try {
         const userId = window.ApiClient.getCurrentUserId();
         if (userId) {
@@ -498,7 +498,7 @@ const LocalizationUtils = {
           });
           if (userResponse.ok) {
             const userData = await userResponse.json();
-            if (userData.Configuration?.AudioLanguagePreference) {
+            if (userData.Configuration && userData.Configuration.AudioLanguagePreference) {
               locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
             }
           }
@@ -508,7 +508,7 @@ const LocalizationUtils = {
       }
     }
 
-    if (!locale && window.ApiClient && STATE.jellyfinData?.accessToken) {
+    if (!locale && window.ApiClient && STATE.jellyfinData && STATE.jellyfinData.accessToken) {
       try {
         const configUrl = window.ApiClient.getUrl('System/Configuration');
         const configResponse = await fetch(configUrl, {
@@ -600,7 +600,7 @@ const LocalizationUtils = {
         }
 
         const chunkText = await response.text();
-        
+
         let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
         if (jsonMatch) {
           let jsonString = jsonMatch[1]
@@ -615,7 +615,7 @@ const LocalizationUtils = {
             // Try direct extraction
           }
         }
-        
+
         const jsonStart = chunkText.indexOf('{');
         const jsonEnd = chunkText.lastIndexOf('}') + 1;
         if (jsonStart !== -1 && jsonEnd > jsonStart) {
@@ -646,7 +646,7 @@ const LocalizationUtils = {
    */
   getLocalizedString(key, fallback, ...args) {
     const locale = this.cachedLocale || 'en-us';
-    let translated = this.translations[locale]?.[key] || fallback;
+    let translated = (this.translations[locale] && this.translations[locale][key]) || fallback;
 
     if (args.length > 0) {
       for (let i = 0; i < args.length; i++) {
@@ -938,8 +938,8 @@ const VisibilityObserver = {
     if (!container) return;
 
     const isVisible =
-        (window.location.hash === "#/home.html" ||
-         window.location.hash === "#/home") &&
+      (window.location.hash === "#/home.html" ||
+        window.location.hash === "#/home") &&
       activeTab.getAttribute("data-index") === "0";
 
     container.style.display = isVisible ? "block" : "none";
