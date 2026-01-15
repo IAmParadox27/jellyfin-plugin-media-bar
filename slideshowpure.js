@@ -630,29 +630,64 @@ const LocalizationUtils = {
           );
         }
 
+        /**
+         * @example
+         * Standard version
+         * ```js
+         * "use strict";
+         * (self.webpackChunk = self.webpackChunk || []).push([[62634], {
+         *   30985: function(e) {
+         *     e.exports = JSON.parse('{"Absolute":"..."}')
+         *   }
+         * }]);
+         * ```
+         *
+         * Minified version
+         * ```js
+         * "use strict";(self.webpackChunk=self.webpackChunk||[]).push([[24072],{60715:function(e){e.exports=JSON.parse('{"Absolute":"..."}')}}]);
+         * ```
+         */
         const chunkText = await response.text();
 
+        const replaceEscaped = (text) =>
+          text.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\').replace(/\\'/g, "'");
+
+        // 1. Try to remove start and end wrappers first
+        try {
+          // Matches from start of file to the beginning of JSON.parse('
+          const START = /^(.*)JSON\.parse\(['"]/gms;
+          // Matches from the end of the JSON string to the end of the file
+          const END = /['"]?\)?\s*}?(\r\n|\r|\n)?}?]?\)?;(\r\n|\r|\n)?$/gms;
+
+          const jsonString = replaceEscaped(chunkText.replace(START, '').replace(END, ''));
+          this.translations[locale] = JSON.parse(jsonString);
+          return;
+        } catch (e) {
+          console.error('Failed to parse JSON from standard extraction.');
+          // Try alternative extraction below
+        }
+
+        // 2. Try to extract only the JSON string directly
         let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
         if (jsonMatch) {
-          let jsonString = jsonMatch[1]
-            .replace(/\\"/g, '"')
-            .replace(/\\n/g, "\n")
-            .replace(/\\\\/g, "\\")
-            .replace(/\\'/g, "'");
           try {
+            const jsonString = replaceEscaped(jsonMatch[1]);
             this.translations[locale] = JSON.parse(jsonString);
             return;
           } catch (e) {
+            console.error('Failed to parse JSON from direct extraction.');
             // Try direct extraction
           }
         }
 
-        const jsonStart = chunkText.indexOf("{");
-        const jsonEnd = chunkText.lastIndexOf("}") + 1;
+        // 3. Fallback: extract everything between the first { and the last }
+        const jsonStart = chunkText.indexOf('{');
+        const jsonEnd = chunkText.lastIndexOf('}') + 1;
         if (jsonStart !== -1 && jsonEnd > jsonStart) {
           const jsonString = chunkText.substring(jsonStart, jsonEnd);
           try {
             this.translations[locale] = JSON.parse(jsonString);
+            return;
           } catch (e) {
             console.error("Failed to parse JSON from chunk:", e);
           }
