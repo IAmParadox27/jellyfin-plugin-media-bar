@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.6
+ * Jellyfin Slideshow by M0RPH3US v3.0.8
  */
 
 @import url(https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&display=swap);
@@ -28,11 +28,11 @@
 
 @keyframes kenBurnsZoomIn {
   from {
-    transform: scale(1);
+    transform: scale3d(1, 1, 0);
   }
 
   to {
-    transform: scale(1.1);
+    transform: scale3d(1.1, 1.1, 0.1);
   }
 }
 
@@ -113,6 +113,10 @@
   border-radius: 2px;
   flex-grow: 1;
   transition: width 0.2s ease-in-out;
+}
+
+.layout-mobile .splashLogo {
+height: 12%;
 }
 
 .backdrop.low-quality {

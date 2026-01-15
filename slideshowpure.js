@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.6
+ * Jellyfin Slideshow by M0RPH3US v3.0.8
  */
 
 //Core Module Configuration
@@ -216,31 +216,53 @@ const initLoadingScreen = () => {
 
   const checkInterval = setInterval(() => {
     const loginFormLoaded = document.querySelector(".manualLoginForm");
-    const homePageLoaded =
-      document.querySelector(".homeSectionsContainer") &&
-      document.querySelector("#slides-container");
+    const activeTab = document.querySelector(".pageTabContent.is-active");
 
-    if (loginFormLoaded || homePageLoaded) {
-      clearInterval(progressInterval);
-      clearInterval(checkInterval);
+    if (loginFormLoaded) {
+      finishLoading();
+      return;
+    }
 
-      progressBar.style.transition = "width 300ms ease-in-out";
-      progressBar.style.width = "100%";
-      unfilledBar.style.width = "0%";
+    if (activeTab) {
+      const tabIndex = activeTab.getAttribute("data-index");
 
-      progressBar.addEventListener('transitionend', () => {
-        requestAnimationFrame(() => {
-          const loader = document.querySelector(".bar-loading");
-          if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-              loader.remove();
-            }, 300);
-          }
-        });
-      })
+      if (tabIndex === "0") {
+        const homeSections = document.querySelector(".homeSectionsContainer");
+        const slidesContainer = document.querySelector("#slides-container");
+
+        if (homeSections && slidesContainer) {
+          finishLoading();
+        }
+      } else {
+        if (
+          activeTab.children.length > 0 ||
+          activeTab.innerText.trim().length > 0
+        ) {
+          finishLoading();
+        }
+      }
     }
   }, CONFIG.loadingCheckInterval);
+
+  const finishLoading = () => {
+    clearInterval(progressInterval);
+    clearInterval(checkInterval);
+    progressBar.style.transition = "width 300ms ease-in-out";
+    progressBar.style.width = "100%";
+    unfilledBar.style.width = "0%";
+
+    progressBar.addEventListener("transitionend", () => {
+      requestAnimationFrame(() => {
+        const loader = document.querySelector(".bar-loading");
+        if (loader) {
+          loader.style.opacity = "0";
+          setTimeout(() => {
+            loader.remove();
+          }, 300);
+        }
+      });
+    });
+  };
 };
 
 /**
@@ -490,18 +512,9 @@ const LocalizationUtils = {
 
     if (window.ApiClient && STATE.jellyfinData?.accessToken) {
       try {
-        const userId = window.ApiClient.getCurrentUserId();
-        if (userId) {
-          const userUrl = window.ApiClient.getUrl(`Users/${userId}`);
-          const userResponse = await fetch(userUrl, {
-            headers: ApiUtils.getAuthHeaders(),
-          });
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            if (userData.Configuration?.AudioLanguagePreference) {
-              locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
-            }
-          }
+        const userData = window.ApiClient.getCurrentUser();
+        if (userData.Configuration?.AudioLanguagePreference) {
+          locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
         }
       } catch (error) {
         console.warn("Could not fetch user language preference:", error);
@@ -510,7 +523,7 @@ const LocalizationUtils = {
 
     if (!locale && window.ApiClient && STATE.jellyfinData?.accessToken) {
       try {
-        const configUrl = window.ApiClient.getUrl('System/Configuration');
+        const configUrl = window.ApiClient.getUrl("System/Configuration");
         const configResponse = await fetch(configUrl, {
           headers: ApiUtils.getAuthHeaders(),
         });
@@ -540,6 +553,18 @@ const LocalizationUtils = {
       locale = navLang ? navLang.toLowerCase() : "en-us";
     }
 
+    // Convert 3-letter country codes to 2-letter if necessary
+    if (locale.length === 3) {
+      const countriesData = await window.ApiClient.getCountries();
+      const countryData = Object.values(countriesData).find(
+        (countryData) =>
+          countryData.ThreeLetterISORegionName === locale.toUpperCase()
+      );
+      if (countryData) {
+        locale = countryData.TwoLetterISORegionName.toLowerCase();
+      }
+    }
+
     this.cachedLocale = locale;
     return locale;
   },
@@ -550,7 +575,7 @@ const LocalizationUtils = {
    * @returns {string|null} URL to translation chunk or null
    */
   findTranslationChunkUrl(locale) {
-    const localePrefix = locale.split('-')[0];
+    const localePrefix = locale.split("-")[0];
 
     if (this.chunkUrlCache[localePrefix]) {
       return this.chunkUrlCache[localePrefix];
@@ -558,10 +583,14 @@ const LocalizationUtils = {
 
     if (window.performance && window.performance.getEntriesByType) {
       try {
-        const resources = window.performance.getEntriesByType('resource');
+        const resources = window.performance.getEntriesByType("resource");
         for (const resource of resources) {
           const url = resource.name || resource.url;
-          if (url && url.includes(`${localePrefix}-json`) && url.includes('.chunk.js')) {
+          if (
+            url &&
+            url.includes(`${localePrefix}-json`) &&
+            url.includes(".chunk.js")
+          ) {
             this.chunkUrlCache[localePrefix] = url;
             return url;
           }
@@ -596,17 +625,19 @@ const LocalizationUtils = {
 
         const response = await fetch(chunkUrl);
         if (!response.ok) {
-          throw new Error(`Failed to fetch translations: ${response.statusText}`);
+          throw new Error(
+            `Failed to fetch translations: ${response.statusText}`
+          );
         }
 
         const chunkText = await response.text();
-        
+
         let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
         if (jsonMatch) {
           let jsonString = jsonMatch[1]
             .replace(/\\"/g, '"')
-            .replace(/\\n/g, '\n')
-            .replace(/\\\\/g, '\\')
+            .replace(/\\n/g, "\n")
+            .replace(/\\\\/g, "\\")
             .replace(/\\'/g, "'");
           try {
             this.translations[locale] = JSON.parse(jsonString);
@@ -615,9 +646,9 @@ const LocalizationUtils = {
             // Try direct extraction
           }
         }
-        
-        const jsonStart = chunkText.indexOf('{');
-        const jsonEnd = chunkText.lastIndexOf('}') + 1;
+
+        const jsonStart = chunkText.indexOf("{");
+        const jsonEnd = chunkText.lastIndexOf("}") + 1;
         if (jsonStart !== -1 && jsonEnd > jsonStart) {
           const jsonString = chunkText.substring(jsonStart, jsonEnd);
           try {
@@ -645,17 +676,17 @@ const LocalizationUtils = {
    * @returns {string} Localized string or fallback
    */
   getLocalizedString(key, fallback, ...args) {
-    const locale = this.cachedLocale || 'en-us';
+    const locale = this.cachedLocale || "en-us";
     let translated = this.translations[locale]?.[key] || fallback;
 
     if (args.length > 0) {
       for (let i = 0; i < args.length; i++) {
-        translated = translated.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
+        translated = translated.replace(new RegExp(`\\{${i}\\}`, "g"), args[i]);
       }
     }
 
     return translated;
-  }
+  },
 };
 
 /**
@@ -823,7 +854,8 @@ const ApiUtils = {
   async getSessionId() {
     try {
       const response = await fetch(
-        `${STATE.jellyfinData.serverAddress
+        `${
+          STATE.jellyfinData.serverAddress
         }/Sessions?deviceId=${encodeURIComponent(STATE.jellyfinData.deviceId)}`,
         {
           headers: this.getAuthHeaders(),
@@ -876,7 +908,7 @@ const ApiUtils = {
     } catch (error) {
       console.error("Error toggling favorite:", error);
     }
-  }
+  },
 };
 
 /**
@@ -989,7 +1021,11 @@ const SlideCreator = {
     // Handle Backdrop images
     if (imageType === "Backdrop") {
       // Check BackdropImageTags array first
-      if (item.BackdropImageTags && Array.isArray(item.BackdropImageTags) && item.BackdropImageTags.length > 0) {
+      if (
+        item.BackdropImageTags &&
+        Array.isArray(item.BackdropImageTags) &&
+        item.BackdropImageTags.length > 0
+      ) {
         const backdropIndex = index !== undefined ? index : 0;
         if (backdropIndex < item.BackdropImageTags.length) {
           tag = item.BackdropImageTags[backdropIndex];
@@ -1017,7 +1053,7 @@ const SlideCreator = {
     // Build URL with tag and quality if tag is available, otherwise quality-only fallback
     if (tag) {
       // Use both tag and quality for cacheable, quality-controlled images
-      const qualityParam = quality !== undefined ? `&quality=${quality}` : '';
+      const qualityParam = quality !== undefined ? `&quality=${quality}` : "";
       return `${baseUrl}?tag=${tag}${qualityParam}`;
     } else {
       // Fallback to quality-only URL if no tag is available
@@ -1052,7 +1088,7 @@ const SlideCreator = {
     const backdrop = SlideUtils.createElement("img", {
       className: "backdrop high-quality",
       src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
-      alt: LocalizationUtils.getLocalizedString('Backdrop', 'Backdrop'),
+      alt: LocalizationUtils.getLocalizedString("Backdrop", "Backdrop"),
       loading: "eager",
     });
 
@@ -1113,7 +1149,7 @@ const SlideCreator = {
 
     const genreElement = SlideUtils.createElement("div", {
       className: "genre",
-      innerHTML: SlideUtils.parseGenres(item.Genres)
+      innerHTML: SlideUtils.parseGenres(item.Genres),
     });
 
     const buttonContainer = SlideUtils.createElement("div", {
@@ -1162,7 +1198,9 @@ const SlideCreator = {
     if (typeof communityRating === "number") {
       const container = SlideUtils.createElement("div", {
         className: "star-rating-container",
-        innerHTML: `<span class="material-icons community-rating-star star" aria-hidden="true"></span>${communityRating.toFixed(1)}`,
+        innerHTML: `<span class="material-icons community-rating-star star" aria-hidden="true"></span>${communityRating.toFixed(
+          1
+        )}`,
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
@@ -1170,14 +1208,17 @@ const SlideCreator = {
 
     // Critic Rating Section (Rotten Tomatoes)
     if (typeof criticRating === "number") {
-      const svgIcon = criticRating < 60 ? CONFIG.IMAGE_SVG.rottenTomato : CONFIG.IMAGE_SVG.freshTomato;
+      const svgIcon =
+        criticRating < 60
+          ? CONFIG.IMAGE_SVG.rottenTomato
+          : CONFIG.IMAGE_SVG.freshTomato;
       const container = SlideUtils.createElement("div", {
         className: "critic-rating",
         innerHTML: `${svgIcon}${criticRating.toFixed(0)}%`,
-      })
+      });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    };
+    }
 
     // Year Section
     if (typeof premiereDate === "string" && !isNaN(new Date(premiereDate))) {
@@ -1187,7 +1228,7 @@ const SlideCreator = {
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    };
+    }
 
     // Age Rating Section
     if (typeof ageRating === "string") {
@@ -1200,7 +1241,7 @@ const SlideCreator = {
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    };
+    }
 
     // Runtime / Seasons Section
     if (seasonCount !== undefined || runtime !== undefined) {
@@ -1208,7 +1249,13 @@ const SlideCreator = {
         className: "runTime",
       });
       if (seasonCount) {
-        const seasonText = seasonCount <= 1 ? LocalizationUtils.getLocalizedString('Season', 'Season') : LocalizationUtils.getLocalizedString('TypeOptionPluralSeason', 'Seasons');
+        const seasonText =
+          seasonCount <= 1
+            ? LocalizationUtils.getLocalizedString("Season", "Season")
+            : LocalizationUtils.getLocalizedString(
+                "TypeOptionPluralSeason",
+                "Seasons"
+              );
         container.innerHTML = `${seasonCount} ${seasonText}`;
       } else {
         const milliseconds = runtime / 10000;
@@ -1216,7 +1263,11 @@ const SlideCreator = {
         const endTime = new Date(currentTime.getTime() + milliseconds);
         const options = { hour: "2-digit", minute: "2-digit", hour12: false };
         const formattedEndTime = endTime.toLocaleTimeString([], options);
-        const endsAtText = LocalizationUtils.getLocalizedString('EndsAtValue', 'Ends at {0}', formattedEndTime);
+        const endsAtText = LocalizationUtils.getLocalizedString(
+          "EndsAtValue",
+          "Ends at {0}",
+          formattedEndTime
+        );
         container.innerText = endsAtText;
       }
       miscInfo.appendChild(container);
@@ -1231,7 +1282,7 @@ const SlideCreator = {
    * @returns {HTMLElement} Play button element
    */
   createPlayButton(itemId) {
-    const playText = LocalizationUtils.getLocalizedString('Play', 'Play');
+    const playText = LocalizationUtils.getLocalizedString("Play", "Play");
     return SlideUtils.createElement("button", {
       className: "detailButton btnPlay play-button",
       innerHTML: `
@@ -1291,7 +1342,6 @@ const SlideCreator = {
     return button;
   },
 
-
   /**
    * Creates a placeholder slide for loading
    * @param {string} itemId - Item ID to load
@@ -1350,7 +1400,6 @@ const SlideCreator = {
  * Manages slideshow functionality
  */
 const SlideshowManager = {
-
   createPaginationDots() {
     let dotsContainer = document.querySelector(".dots-container");
     if (!dotsContainer) {
@@ -1580,17 +1629,20 @@ const SlideshowManager = {
 
   togglePause() {
     STATE.slideshow.isPaused = !STATE.slideshow.isPaused;
-    const pauseButton = document.querySelector('.pause-button');
+    const pauseButton = document.querySelector(".pause-button");
     if (STATE.slideshow.isPaused) {
       STATE.slideshow.slideInterval.stop();
       pauseButton.innerHTML = '<i class="material-icons">play_arrow</i>';
-      const playLabel = LocalizationUtils.getLocalizedString('Play', 'Play');
+      const playLabel = LocalizationUtils.getLocalizedString("Play", "Play");
       pauseButton.setAttribute("aria-label", playLabel);
       pauseButton.setAttribute("title", playLabel);
     } else {
       STATE.slideshow.slideInterval.start();
       pauseButton.innerHTML = '<i class="material-icons">pause</i>';
-      const pauseLabel = LocalizationUtils.getLocalizedString('ButtonPause', 'Pause');
+      const pauseLabel = LocalizationUtils.getLocalizedString(
+        "ButtonPause",
+        "Pause"
+      );
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
     }
@@ -1769,13 +1821,13 @@ const initArrowNavigation = () => {
     className: "pause-button",
     innerHTML: '<i class="material-icons">pause</i>',
     tabIndex: "0",
-    "aria-label": LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
-    title: LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
+    "aria-label": LocalizationUtils.getLocalizedString("ButtonPause", "Pause"),
+    title: LocalizationUtils.getLocalizedString("ButtonPause", "Pause"),
     onclick: (e) => {
       e.preventDefault();
       e.stopPropagation();
       SlideshowManager.togglePause();
-    }
+    },
   });
 
   container.appendChild(leftArrow);

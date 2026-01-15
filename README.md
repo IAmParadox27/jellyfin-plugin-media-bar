@@ -65,12 +65,8 @@ Credits for this plugin go to @MakD for his original work and to @BobHasNoSoul a
 
 # Jellyfin-Media-Bar - Now with Play Now Function
 
-> [!NOTE]
-> The Media Bar is currently partly compatible with the Jellyfin 10.11.x update. We’re aware of the changes required to make it fully compatible and will be addressing them soon.
->
-> I’ll be away on vacation for a short while, so there will be a temporary delay in releasing the next update. I kindly ask that you refrain from opening new bug reports related to 10.11.x compatibility during this period — we’ve got it on our radar.
->
-> Thank you for your patience and understanding! The fixes will be rolled out shortly after I return.
+![jsDelivr hits (GitHub)](https://img.shields.io/jsdelivr/gh/hm/makd/Jellyfin-Media-Bar?style=for-the-badge&logo=javascript&logoColor=white&labelColor=F0DB4F&color=323330&cacheSeconds=3600)
+
 
 
 **IMP UPDATE — We have dropped support for the normal CSS version (for now). _(It still works, but there will be no further updates till the fullscreen mode is stabilized)_**
