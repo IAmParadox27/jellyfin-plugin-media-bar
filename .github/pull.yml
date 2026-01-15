@@ -1,0 +1,14 @@
+version: "1"
+rules:
+  - base: main
+    upstream: MakD:Jellyfin-Media-Bar
+    mergeMethod: merge
+    mergeUnstable: false
+    assignees:
+      - IAmParadox27
+    reviewers:
+      - IAmParadox27
+    conflictReviewers:
+      - IAmParadox27
+label: ":arrow_heading_down: pull"
+conflictLabel: "merge-conflict"

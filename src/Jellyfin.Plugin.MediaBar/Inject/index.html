@@ -1,0 +1,68 @@
+﻿<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.css" />
+<script defer src="https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.js"></script>
+<script defer>
+    if (typeof MediaBarConfigHandler == 'undefined') {
+        const MediaBarConfigHandler = {
+            loadConfig: async function () {
+                return await window.ApiClient.getJSON(window.ApiClient.getUrl("MediaBar/WebConfig"));
+            },
+            init: async function () {
+                let config = await MediaBarConfigHandler.loadConfig();
+
+                if (config.ImageSvgs.ImdbLogo !== null && config.ImageSvgs.ImdbLogo !== undefined) {
+                    window.slideshowPure.CONFIG.IMAGE_SVG.imdbLogo = config.ImageSvgs.ImdbLogo;
+                }
+                if (config.ImageSvgs.TomatoLogo !== null && config.ImageSvgs.TomatoLogo !== undefined) {
+                    window.slideshowPure.CONFIG.IMAGE_SVG.imdbLogo = config.ImageSvgs.TomatoLogo;
+                }
+                if (config.ImageSvgs.FreshTomato !== null && config.ImageSvgs.FreshTomato !== undefined) {
+                    window.slideshowPure.CONFIG.IMAGE_SVG.imdbLogo = config.ImageSvgs.FreshTomato;
+                }
+                if (config.ImageSvgs.RottenTomato !== null && config.ImageSvgs.RottenTomato !== undefined) {
+                    window.slideshowPure.CONFIG.IMAGE_SVG.imdbLogo = config.ImageSvgs.RottenTomato;
+                }
+                if (config.ShuffleInterval >= 0) {
+                    window.slideshowPure.CONFIG.shuffleInterval = config.ShuffleInterval;
+                }
+                if (config.RetryInterval >= 0) {
+                    window.slideshowPure.CONFIG.retryInterval = config.RetryInterval;
+                }
+                if (config.MinSwipeDistance >= 0) {
+                    window.slideshowPure.CONFIG.minSwipeDistance = config.MinSwipeDistance;
+                }
+                if (config.LoadingCheckInterval >= 0) {
+                    window.slideshowPure.CONFIG.loadingCheckInterval = config.LoadingCheckInterval;
+                }
+                if (config.MaxPlotLength >= 0) {
+                    window.slideshowPure.CONFIG.maxPlotLength = config.MaxPlotLength;
+                }
+                if (config.MaxMovies >= 0) {
+                    window.slideshowPure.CONFIG.maxMovies = config.MaxMovies;
+                }
+                if (config.MaxTvShows >= 0) {
+                    window.slideshowPure.CONFIG.maxTvShows = config.MaxTvShows;
+                }
+                if (config.MaxItems >= 0) {
+                    window.slideshowPure.CONFIG.maxItems = config.MaxItems;
+                }
+                if (config.PreloadCount >= 0) {
+                    window.slideshowPure.CONFIG.preloadCount = config.PreloadCount;
+                }
+                if (config.FadeTransitionDuration >= 0) {
+                    window.slideshowPure.CONFIG.fadeTransitionDuration = config.FadeTransitionDuration;
+                }
+                window.slideshowPure.CONFIG.slideAnimationEnabled = config.SlideAnimationEnabled;
+            }
+        };
+
+        let waitingForPluginInterval = setInterval(function () {
+            if (window.slideshowPure && window.slideshowPure.CONFIG && window.ApiClient) {
+                clearInterval(waitingForPluginInterval);
+                
+                MediaBarConfigHandler.init().then(r => {
+                    console.log('Loaded Media Bar plugin config into plugin javascript');
+                });
+            }
+        }, 100);
+    }
+</script>

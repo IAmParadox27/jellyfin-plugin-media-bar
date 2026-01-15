@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <JellyfinVersion>10.11.2</JellyfinVersion>
+        <JellyfinNugetVersion Condition="!$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
+        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
+        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11.1'))">10.11.0</JellyfinNugetVersion>
+        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11.0'))">10.11.0</JellyfinNugetVersion>
+        <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
+        <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <Version>2.4.0.0</Version>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Jellyfin.Model" Version="$(JellyfinNugetVersion)" />
+        <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinNugetVersion)" />
+        <PackageReference Include="Jellyfin.Common" Version="$(JellyfinNugetVersion)" />
+        <PackageReference Include="Jellyfin.Data" Version="$(JellyfinNugetVersion)" />
+
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    </ItemGroup>
+    
+    <!-- 10.10.7 Specific Code from non 10.10.7 builds -->
+    <ItemGroup Condition="'$(JellyfinVersion)' != '10.10.7'">
+        <None Include="JellyfinVersionSpecific/10.10.7/*.cs" />
+        <Compile Remove="JellyfinVersionSpecific/10.10.7/*.cs" />
+    </ItemGroup>
+
+    <!-- Remove 10.11.0 Specific Code from non 10.11.0 builds -->
+    <ItemGroup Condition="'$(JellyfinVersion)' != '10.11.0'">
+        <None Include="JellyfinVersionSpecific/10.11.0/*.cs" />
+        <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11'))">
+        <None Include="JellyfinVersionSpecific/10.11/*.cs" />
+        <Compile Remove="JellyfinVersionSpecific/10.11/*.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="Configuration\config.html" />
+      <None Remove="Inject\index.html" />
+      <EmbeddedResource Include="Inject\index.html" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" />
+        <None Include="..\logo.png" CopyToOutputDirectory="Always" />
+        <None Include="..\..\slideshowpure.js" />
+        <None Include="..\..\slideshowpure.css" />
+    </ItemGroup>
+    
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar')">
+        <Exec Condition="'$(JellyfinVersion)' == '10.11.1'" Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar&quot; /y" />
+        <Exec Condition="'$(JellyfinVersion)' == '10.10.7'"     Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_10_7\plugins\MediaBar&quot; /y" />
+    </Target>
+</Project>

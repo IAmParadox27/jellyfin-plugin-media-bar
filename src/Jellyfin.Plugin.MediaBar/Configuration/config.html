@@ -1,0 +1,262 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <title>Media Bar</title>
+</head>
+<body>
+<div data-role="page" id="mediaBarConfigurationPage" class="page type-interior pluginConfigurationPage fullWidthContent">
+    <div class="content-primary">
+        <div class="verticalSection">
+            <div class="sectionTitleContainer">
+                <h2 class="sectionTitle">Media Bar</h2>
+                <a is="emby-linkbutton" class="raised raised-mini" style="margin-left: 2em;" target="_blank"
+                   href="https://github.com/IAmParadox27/jellyfin-plugin-media-bar">
+                    <i class="md-icon button-icon button-icon-left secondaryText"></i>
+                    <span>Help</span>
+                </a>
+            </div>
+        </div>
+        <hr class="solid" style="margin-bottom: 1.5em;">
+        <div style="margin-bottom: 1.5em;">
+            <button class="jellyfin-tab-button active" data-tab="general" style="background: none; border: none; color: #fff; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid #fff; padding: 0.5em 1em;"><h3>General Settings</h3></button>
+            <button class="jellyfin-tab-button" data-tab="web-config" style="background: none; border: none; color: #ccc; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid transparent; padding: 0.5em 1em;"><h3>Web Config Settings</h3></button>
+        </div>
+
+        <form class="mediaBarConfigurationForm">
+            <div id="general" class="jellyfin-tab-content active" style="display: block;">
+                <div id="configurationWrapper">
+                    <div class="inputContainer">
+                        <span>Enabled: </span>
+                        <select is="emby-select" class="emby-select-withcolor emby-select" data-id="enabledSelect">
+                            <option value="Enabled">Enabled</option>
+                            <option value="Disabled">Disabled</option>
+                        </select>
+                        <span>Whether the media bar should appear or not.</span>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtVersionString">Version</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtVersionString"></label>
+                        <input id="txtVersionString" type="text" is="emby-input" class="emby-input" data-id="txtVersionString" />
+                        <div class="fieldDescription">Which version of the jsdelivr'd plugin should be used.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkUseAvatarsFile" is="emby-checkbox" class="emby-checkbox" data-id="chkUseAvatarsFile" />
+                            <span class="checkboxLabel">Use physical avatars file</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">If checked, the plugin will look for a list.txt file in the avatars directory at the root of jellyfin-web.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtAvatarsPlaylist">Avatars Playlist</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtAvatarsPlaylist"></label>
+                        <input id="txtAvatarsPlaylist" type="text" is="emby-input" class="emby-input" data-id="txtAvatarsPlaylist" />
+                        <div class="fieldDescription">If populated, and "Use physical avatars file" is disabled, this is the name of the playlist which is used to populate the media bar.<br />
+                        If empty, the media bar will randomly populate.</div>
+                    </div>
+                </div>
+            </div>
+            <div id="web-config" class="jellyfin-tab-content" style="display: none;">
+                <div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numShuffleInterval">Shuffle Interval</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numShuffleInterval"></label>
+                        <input id="numShuffleInterval" type="number" is="emby-input" class="emby-input" data-id="numShuffleInterval" />
+                        <div class="fieldDescription">How long (ms) should each slide last before changing to the next? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numRetryInterval">Retry Interval</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numRetryInterval"></label>
+                        <input id="numRetryInterval" type="number" is="emby-input" class="emby-input" data-id="numRetryInterval" />
+                        <div class="fieldDescription">How long (ms) should to wait before trying again after a failed initialization? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numMinSwipeDistance">Min Swipe Distance</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numMinSwipeDistance"></label>
+                        <input id="numMinSwipeDistance" type="number" is="emby-input" class="emby-input" data-id="numMinSwipeDistance" />
+                        <div class="fieldDescription">How far (px) should the user have to swipe before triggering the next/prev slide? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numLoadingCheckInterval">Loading Check Interval</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numLoadingCheckInterval"></label>
+                        <input id="numLoadingCheckInterval" type="number" is="emby-input" class="emby-input" data-id="numLoadingCheckInterval" />
+                        <div class="fieldDescription">How long (ms) between checking whether the login screen or home screen has loaded? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numMaxPlotLength">Max Plot Length</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numMaxPlotLength"></label>
+                        <input id="numMaxPlotLength" type="number" is="emby-input" class="emby-input" data-id="numMaxPlotLength" />
+                        <div class="fieldDescription">How many words should be displayed for the plot on the Media Bar? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer" style="display:none;"><!-- Config variable doesn't seem to be used -->
+                        <label class="inputLabel inputLabelUnfocused" for="numMaxMovies">Max Movies</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numMaxMovies"></label>
+                        <input id="numMaxMovies" type="number" is="emby-input" class="emby-input" data-id="numMaxMovies" />
+                        <div class="fieldDescription">? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer" style="display:none;"><!-- Config variable doesn't seem to be used -->
+                        <label class="inputLabel inputLabelUnfocused" for="numMaxTvShows">Max TV Shows</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numMaxTvShows"></label>
+                        <input id="numMaxTvShows" type="number" is="emby-input" class="emby-input" data-id="numMaxTvShows" />
+                        <div class="fieldDescription">? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numMaxItems">Max Items</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numMaxItems"></label>
+                        <input id="numMaxItems" type="number" is="emby-input" class="emby-input" data-id="numMaxItems" />
+                        <div class="fieldDescription">Maximum number of items to retrieve from the server, this is also the number of items in the loop? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numPreloadCount">Preload Count</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numPreloadCount"></label>
+                        <input id="numPreloadCount" type="number" is="emby-input" class="emby-input" data-id="numPreloadCount" />
+                        <div class="fieldDescription">Number of slides in the future to load before showing them? This helps with ensuring the image is visible when its ready to be displayed. (set to -1 to use default value)</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numFadeTransitionDuration">Fade Transition Duration</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="numFadeTransitionDuration"></label>
+                        <input id="numFadeTransitionDuration" type="number" is="emby-input" class="emby-input" data-id="numFadeTransitionDuration" />
+                        <div class="fieldDescription">How long (ms) should the fade transition take when changing slide? (set to -1 to use default value)</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 1.5em;">
+                        <label class="emby-checkbox-label">
+                            <input data-id="chkSlideAnimationEnabled" id="chkSlideAnimationEnabled" type="checkbox" is="emby-checkbox" class="emby-checkbox">
+                            <span class="checkboxLabel">Slide Animation Enabled?</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Do the slides animate while they're visible? (the zooming in effect, can be quite performance heavy)</div>
+                    </div>
+                </div>
+            </div>
+            <br />
+            <button id="saveConfig" is="emby-button" type="submit" class="emby-button raised button-submit block">
+                <span>Save</span>
+            </button>
+        </form>
+    </div>
+    <script type="text/javascript">
+        if (typeof MediaBarConfig == 'undefined') {
+            
+            const MediaBarConfig = {
+                pluginId: "08f615ea-2107-4f04-89cc-091035f54448",
+                configurationWrapper: document.querySelector("#configurationWrapper"),
+
+                btnSave: document.querySelector("#saveConfig"),
+                
+                setupTabs: function() {
+                    const tabs = document.querySelectorAll('.jellyfin-tab-button');
+                    const tabContents = document.querySelectorAll('.jellyfin-tab-content');
+                    tabs.forEach(tab => {
+                        tab.addEventListener('click', () => {
+                            tabs.forEach(t => {
+                                t.classList.remove('active');
+                                t.style.color = '#ccc';
+                                t.style.borderBottom = '2px solid transparent';
+                            });
+                            tab.classList.add('active');
+                            tab.style.color = 'var(--primary-accent-color, #fff)';
+                            tab.style.borderBottom = '2px solid var(--primary-accent-color, #fff)';
+                            tabContents.forEach(content => {
+                                content.classList.remove('active');
+                                content.style.display = 'none';
+                            });
+                            const activeTab = document.getElementById(tab.dataset.tab);
+                            activeTab.classList.add('active');
+                            activeTab.style.display = 'block';
+                        });
+                    });
+                },
+                saveConfig: function (e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    const config = {
+                        Enabled: document.querySelector("[data-id=enabledSelect]").value,
+                        UseAvatarsFile: document.querySelector("[data-id=chkUseAvatarsFile]").checked,
+                        AvatarsPlaylist: document.querySelector("[data-id=txtAvatarsPlaylist]").value,
+                        VersionString: document.querySelector("[data-id=txtVersionString]").value,
+                        WebConfig: {
+                            ImageSvgs: {
+                                ImdbLogo: null,
+                                TomatoLogo: null,
+                                FreshTomato: null,
+                                RottenTomato: null, 
+                            },
+                            ShuffleInterval: parseInt(document.querySelector("[data-id=numShuffleInterval]").value, 10),
+                            RetryInterval: parseInt(document.querySelector("[data-id=numRetryInterval]").value, 10),
+                            MinSwipeDistance: parseInt(document.querySelector("[data-id=numMinSwipeDistance]").value, 10),
+                            LoadingCheckInterval: parseInt(document.querySelector("[data-id=numLoadingCheckInterval]").value, 10),
+                            MaxPlotLength: parseInt(document.querySelector("[data-id=numMaxPlotLength]").value, 10),
+                            MaxMovies: parseInt(document.querySelector("[data-id=numMaxMovies]").value, 10),
+                            MaxTvShows: parseInt(document.querySelector("[data-id=numMaxTvShows]").value, 10),
+                            MaxItems: parseInt(document.querySelector("[data-id=numMaxItems]").value, 10),
+                            PreloadCount: parseInt(document.querySelector("[data-id=numPreloadCount]").value, 10),
+                            FadeTransitionDuration: parseInt(document.querySelector("[data-id=numFadeTransitionDuration]").value, 10),
+                            SlideAnimationEnabled: document.querySelector("[data-id=chkSlideAnimationEnabled]").checked,
+                        }
+                    };
+
+                    window.ApiClient.updatePluginConfiguration(MediaBarConfig.pluginId, config)
+                        .then(Dashboard.processPluginConfigurationUpdateResult)
+                        .catch(function (error) {
+                            console.error(error);
+                        })
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+                },
+                loadConfig: function () {
+                    Dashboard.showLoadingMsg();
+                    window.ApiClient.getPluginConfiguration(MediaBarConfig.pluginId)
+                        .then(function (config) {
+                            document.querySelector("[data-id=enabledSelect]").value = config.Enabled;
+                            document.querySelector("[data-id=chkUseAvatarsFile]").checked = config.UseAvatarsFile;
+                            document.querySelector("[data-id=txtAvatarsPlaylist]").value = config.AvatarsPlaylist;
+                            
+                            if (config.VersionString === 'latest') {
+                                config.VersionString = 'main';
+                            }
+                            
+                            document.querySelector("[data-id=txtVersionString]").value = config.VersionString;
+                            
+                            document.querySelector("[data-id=numShuffleInterval]").value = config.WebConfig.ShuffleInterval;
+                            document.querySelector("[data-id=numRetryInterval]").value = config.WebConfig.RetryInterval;
+                            document.querySelector("[data-id=numMinSwipeDistance]").value = config.WebConfig.MinSwipeDistance;
+                            document.querySelector("[data-id=numLoadingCheckInterval]").value = config.WebConfig.LoadingCheckInterval;
+                            document.querySelector("[data-id=numMaxPlotLength]").value = config.WebConfig.MaxPlotLength;
+                            document.querySelector("[data-id=numMaxMovies]").value = config.WebConfig.MaxMovies;
+                            document.querySelector("[data-id=numMaxTvShows]").value = config.WebConfig.MaxTvShows;
+                            document.querySelector("[data-id=numMaxItems]").value = config.WebConfig.MaxItems;
+                            document.querySelector("[data-id=numPreloadCount]").value = config.WebConfig.PreloadCount;
+                            document.querySelector("[data-id=numFadeTransitionDuration]").value = config.WebConfig.FadeTransitionDuration;
+                            document.querySelector("[data-id=chkSlideAnimationEnabled]").checked = config.WebConfig.SlideAnimationEnabled;
+                        })
+                        .catch(function (error) {
+                            console.error(error);
+                        })
+                        .finally(function () {
+                            Dashboard.hideLoadingMsg();
+                        });
+                },
+                init: function () {
+                    MediaBarConfig.setupTabs();
+                    
+                    MediaBarConfig.btnSave.addEventListener("click", MediaBarConfig.saveConfig);
+                    MediaBarConfig.loadConfig();
+                }
+            }
+
+            // view.addEventListener("viewshow", function (e) {
+            document.querySelector('#mediaBarConfigurationPage').addEventListener("pageshow", function () {
+                MediaBarConfig.init();
+            });
+        }
+    </script>
+</div>
+</body>
+</html>
