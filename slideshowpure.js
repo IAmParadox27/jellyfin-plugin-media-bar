@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.8
+ * Jellyfin Slideshow by M0RPH3US v4.0.0
  */
 
 //Core Module Configuration
@@ -10,7 +10,7 @@ const CONFIG = {
     rottenTomato:
       '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" viewBox="0 0 145 140" width="20" height="18"><path fill="#0fc755" d="M47.4 35.342c-13.607-7.935-12.32-25.203 2.097-31.88 26.124-6.531 29.117 13.78 22.652 30.412-6.542 24.11 18.095 23.662 19.925 10.067 3.605-18.412 19.394-26.695 31.67-16.359 12.598 12.135 7.074 36.581-17.827 34.187-16.03-1.545-19.552 19.585.839 21.183 32.228 1.915 42.49 22.167 31.04 35.865-15.993 15.15-37.691-4.439-45.512-19.505-6.8-9.307-17.321.11-13.423 6.502 12.983 19.465 2.923 31.229-10.906 30.62-13.37-.85-20.96-9.06-13.214-29.15 3.897-12.481-8.595-15.386-16.57-5.45-11.707 19.61-28.865 13.68-33.976 4.19-3.243-7.621-2.921-25.846 24.119-23.696 16.688 4.137 11.776-12.561-.63-13.633-9.245-.443-30.501-7.304-22.86-24.54 7.34-11.056 24.958-11.768 33.348 6.293 3.037 4.232 8.361 11.042 18.037 5.033 3.51-5.197 1.21-13.9-8.809-20.135z"/></svg>',
   },
-  shuffleInterval: 7000,
+  shuffleInterval: 12000,
   retryInterval: 500,
   minSwipeDistance: 50,
   loadingCheckInterval: 100,
@@ -21,6 +21,7 @@ const CONFIG = {
   preloadCount: 3,
   fadeTransitionDuration: 500,
   slideAnimationEnabled: true,
+  enableTrailers: true,
 };
 
 // State management
@@ -47,7 +48,29 @@ const STATE = {
     createdSlides: {},
     totalItems: 0,
     isLoading: false,
+    players: {},
+    ytPromise: null,
+    isMuted: true,
   },
+};
+
+const loadYouTubeAPI = () => {
+  if (STATE.slideshow.ytPromise) return STATE.slideshow.ytPromise;
+
+  STATE.slideshow.ytPromise = new Promise((resolve) => {
+    if (window.YT && window.YT.Player) {
+      resolve(window.YT);
+      return;
+    }
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  });
+  return STATE.slideshow.ytPromise;
 };
 
 // Request throttling system
@@ -343,7 +366,7 @@ const waitForApiClientAndInitialize = () => {
       window.ApiClient._serverInfo.AccessToken
     ) {
       console.log(
-        "🔓 User is fully logged in. Starting slideshow initialization..."
+        "🔓 User is fully logged in. Starting slideshow initialization...",
       );
       clearInterval(window.slideshowCheckInterval);
 
@@ -351,6 +374,7 @@ const waitForApiClientAndInitialize = () => {
         initJellyfinData(async () => {
           console.log("✅ Jellyfin API client initialized successfully");
           await initLocalization();
+          await loadYouTubeAPI();
           slidesInit();
         });
       } else {
@@ -358,7 +382,7 @@ const waitForApiClientAndInitialize = () => {
       }
     } else {
       console.log(
-        "🔒 Authentication incomplete. Waiting for complete login..."
+        "🔒 Authentication incomplete. Waiting for complete login...",
       );
     }
   }, CONFIG.retryInterval);
@@ -552,13 +576,11 @@ const LocalizationUtils = {
       const navLang = navigator.language || navigator.userLanguage;
       locale = navLang ? navLang.toLowerCase() : "en-us";
     }
-
-    // Convert 3-letter country codes to 2-letter if necessary
     if (locale.length === 3) {
       const countriesData = await window.ApiClient.getCountries();
       const countryData = Object.values(countriesData).find(
         (countryData) =>
-          countryData.ThreeLetterISORegionName === locale.toUpperCase()
+          countryData.ThreeLetterISORegionName === locale.toUpperCase(),
       );
       if (countryData) {
         locale = countryData.TwoLetterISORegionName.toLowerCase();
@@ -626,24 +648,56 @@ const LocalizationUtils = {
         const response = await fetch(chunkUrl);
         if (!response.ok) {
           throw new Error(
-            `Failed to fetch translations: ${response.statusText}`
+            `Failed to fetch translations: ${response.statusText}`,
           );
         }
 
+        /**
+         * @example
+         * Standard version
+         * ```js
+         * "use strict";
+         * (self.webpackChunk = self.webpackChunk || []).push([[62634], {
+         *   30985: function(e) {
+         *     e.exports = JSON.parse('{"Absolute":"..."}')
+         *   }
+         * }]);
+         * ```
+         *
+         * Minified version
+         * ```js
+         * "use strict";(self.webpackChunk=self.webpackChunk||[]).push([[24072],{60715:function(e){e.exports=JSON.parse('{"Absolute":"..."}')}}]);
+         * ```
+         */
         const chunkText = await response.text();
 
-        let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
-        if (jsonMatch) {
-          let jsonString = jsonMatch[1]
+        const replaceEscaped = (text) =>
+          text
             .replace(/\\"/g, '"')
             .replace(/\\n/g, "\n")
             .replace(/\\\\/g, "\\")
             .replace(/\\'/g, "'");
+        try {
+          const START = /^(.*)JSON\.parse\(['"]/gms;
+          const END = /['"]?\)?\s*}?(\r\n|\r|\n)?}?]?\)?;(\r\n|\r|\n)?$/gms;
+
+          const jsonString = replaceEscaped(
+            chunkText.replace(START, "").replace(END, ""),
+          );
+          this.translations[locale] = JSON.parse(jsonString);
+          return;
+        } catch (e) {
+          console.error("Failed to parse JSON from standard extraction.");
+        }
+
+        let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
+        if (jsonMatch) {
           try {
+            const jsonString = replaceEscaped(jsonMatch[1]);
             this.translations[locale] = JSON.parse(jsonString);
             return;
           } catch (e) {
-            // Try direct extraction
+            console.error("Failed to parse JSON from direct extraction.");
           }
         }
 
@@ -653,6 +707,7 @@ const LocalizationUtils = {
           const jsonString = chunkText.substring(jsonStart, jsonEnd);
           try {
             this.translations[locale] = JSON.parse(jsonString);
+            return;
           } catch (e) {
             console.error("Failed to parse JSON from chunk:", e);
           }
@@ -708,7 +763,7 @@ const ApiUtils = {
         `${STATE.jellyfinData.serverAddress}/Items/${itemId}`,
         {
           headers: this.getAuthHeaders(),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -777,15 +832,15 @@ const ApiUtils = {
       console.log("Fetching random items from server...");
 
       const response = await fetch(
-        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&sortBy=Random&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id`,
+        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&sortBy=Random&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id,ImageTags,RemoteTrailers`,
         {
           headers: this.getAuthHeaders(),
-        }
+        },
       );
 
       if (!response.ok) {
         console.error(
-          `Failed to fetch items: ${response.status} ${response.statusText}`
+          `Failed to fetch items: ${response.status} ${response.statusText}`,
         );
         return [];
       }
@@ -794,10 +849,12 @@ const ApiUtils = {
       const items = data.Items || [];
 
       console.log(
-        `Successfully fetched ${items.length} random items from server`
+        `Successfully fetched ${items.length} random items from server`,
       );
 
-      return items.map((item) => item.Id);
+      return items
+        .filter((item) => item.ImageTags && item.ImageTags.Logo)
+        .map((item) => item.Id);
     } catch (error) {
       console.error("Error fetching item IDs:", error);
       return [];
@@ -835,7 +892,7 @@ const ApiUtils = {
 
       if (!playResponse.ok) {
         throw new Error(
-          `Failed to send play command: ${playResponse.statusText}`
+          `Failed to send play command: ${playResponse.statusText}`,
         );
       }
 
@@ -859,7 +916,7 @@ const ApiUtils = {
         }/Sessions?deviceId=${encodeURIComponent(STATE.jellyfinData.deviceId)}`,
         {
           headers: this.getAuthHeaders(),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -871,7 +928,7 @@ const ApiUtils = {
       if (!sessions || sessions.length === 0) {
         console.warn(
           "No sessions found for deviceId:",
-          STATE.jellyfinData.deviceId
+          STATE.jellyfinData.deviceId,
         );
         return null;
       }
@@ -882,8 +939,6 @@ const ApiUtils = {
       return null;
     }
   },
-
-  //Favorites
 
   async toggleFavorite(itemId, button) {
     try {
@@ -1018,9 +1073,7 @@ const SlideCreator = {
     const itemId = item.Id;
     let tag = null;
 
-    // Handle Backdrop images
     if (imageType === "Backdrop") {
-      // Check BackdropImageTags array first
       if (
         item.BackdropImageTags &&
         Array.isArray(item.BackdropImageTags) &&
@@ -1031,18 +1084,15 @@ const SlideCreator = {
           tag = item.BackdropImageTags[backdropIndex];
         }
       }
-      // Fallback to ImageTags.Backdrop if BackdropImageTags not available
       if (!tag && item.ImageTags && item.ImageTags.Backdrop) {
         tag = item.ImageTags.Backdrop;
       }
     } else {
-      // For other image types (Logo, Primary, etc.), use ImageTags
       if (item.ImageTags && item.ImageTags[imageType]) {
         tag = item.ImageTags[imageType];
       }
     }
 
-    // Build base URL path
     let baseUrl;
     if (index !== undefined) {
       baseUrl = `${serverAddress}/Items/${itemId}/Images/${imageType}/${index}`;
@@ -1050,13 +1100,10 @@ const SlideCreator = {
       baseUrl = `${serverAddress}/Items/${itemId}/Images/${imageType}`;
     }
 
-    // Build URL with tag and quality if tag is available, otherwise quality-only fallback
     if (tag) {
-      // Use both tag and quality for cacheable, quality-controlled images
       const qualityParam = quality !== undefined ? `&quality=${quality}` : "";
       return `${baseUrl}?tag=${tag}${qualityParam}`;
     } else {
-      // Fallback to quality-only URL if no tag is available
       const qualityParam = quality !== undefined ? quality : 90;
       return `${baseUrl}?quality=${qualityParam}`;
     }
@@ -1066,7 +1113,7 @@ const SlideCreator = {
    * Creates a slide element for an item
    * @param {Object} item - Item data
    * @param {string} title - Title type (Movie/TV Show)
-   * @returns {HTMLElement} Slide element
+   * @returns {Object} Object containing slide, videoId, and container
    */
   createSlideElement(item, title) {
     if (!item || !item.Id) {
@@ -1077,13 +1124,40 @@ const SlideCreator = {
     const itemId = item.Id;
     const serverAddress = STATE.jellyfinData.serverAddress;
 
-    const slide = SlideUtils.createElement("a", {
+    const slide = SlideUtils.createElement("div", {
       className: "slide",
-      target: "_top",
-      rel: "noreferrer",
-      tabIndex: 0,
       "data-item-id": itemId,
     });
+
+    let videoId = null;
+    let trailerContainer = null;
+
+    if (
+      CONFIG.enableTrailers &&
+      item.RemoteTrailers &&
+      item.RemoteTrailers.length > 0
+    ) {
+      try {
+        const urlObj = new URL(item.RemoteTrailers[0].Url);
+        videoId = urlObj.searchParams.get("v");
+      } catch (e) {}
+
+      if (videoId) {
+        trailerContainer = SlideUtils.createElement("div", {
+          className: "video-container",
+          id: `trailer-${item.Id}`,
+          style: { width: `calc(100vh * 1.777)` },
+        });
+
+        const playerDiv = SlideUtils.createElement("div", {
+          className: "video-player",
+          id: `yt-player-${item.Id}`,
+        });
+
+        trailerContainer.appendChild(playerDiv);
+        slide.appendChild(trailerContainer);
+      }
+    }
 
     const backdrop = SlideUtils.createElement("img", {
       className: "backdrop high-quality",
@@ -1118,7 +1192,7 @@ const SlideCreator = {
       {
         className: "featured-content",
       },
-      title
+      title,
     );
 
     const plot = item.Overview || "No overview available";
@@ -1127,7 +1201,7 @@ const SlideCreator = {
       {
         className: "plot",
       },
-      plot
+      plot,
     );
     SlideUtils.truncateText(plotElement, CONFIG.maxPlotLength);
 
@@ -1169,10 +1243,10 @@ const SlideCreator = {
       plotContainer,
       infoContainer,
       genreElement,
-      buttonContainer
+      buttonContainer,
     );
 
-    return slide;
+    return { slide, videoId, trailerContainer };
   },
 
   /**
@@ -1194,19 +1268,17 @@ const SlideCreator = {
       className: "misc-info",
     });
 
-    // Community Rating Section (IMDb)
     if (typeof communityRating === "number") {
       const container = SlideUtils.createElement("div", {
         className: "star-rating-container",
         innerHTML: `<span class="material-icons community-rating-star star" aria-hidden="true"></span>${communityRating.toFixed(
-          1
+          1,
         )}`,
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
     }
 
-    // Critic Rating Section (Rotten Tomatoes)
     if (typeof criticRating === "number") {
       const svgIcon =
         criticRating < 60
@@ -1220,7 +1292,6 @@ const SlideCreator = {
       miscInfo.appendChild(SlideUtils.createSeparator());
     }
 
-    // Year Section
     if (typeof premiereDate === "string" && !isNaN(new Date(premiereDate))) {
       const container = SlideUtils.createElement("div", {
         className: "date",
@@ -1230,7 +1301,6 @@ const SlideCreator = {
       miscInfo.appendChild(SlideUtils.createSeparator());
     }
 
-    // Age Rating Section
     if (typeof ageRating === "string") {
       const container = SlideUtils.createElement("div", {
         className: "age-rating mediaInfoOfficialRating",
@@ -1243,7 +1313,6 @@ const SlideCreator = {
       miscInfo.appendChild(SlideUtils.createSeparator());
     }
 
-    // Runtime / Seasons Section
     if (seasonCount !== undefined || runtime !== undefined) {
       const container = SlideUtils.createElement("div", {
         className: "runTime",
@@ -1254,7 +1323,7 @@ const SlideCreator = {
             ? LocalizationUtils.getLocalizedString("Season", "Season")
             : LocalizationUtils.getLocalizedString(
                 "TypeOptionPluralSeason",
-                "Seasons"
+                "Seasons",
               );
         container.innerHTML = `${seasonCount} ${seasonText}`;
       } else {
@@ -1266,7 +1335,7 @@ const SlideCreator = {
         const endsAtText = LocalizationUtils.getLocalizedString(
           "EndsAtValue",
           "Ends at {0}",
-          formattedEndTime
+          formattedEndTime,
         );
         container.innerText = endsAtText;
       }
@@ -1311,7 +1380,7 @@ const SlideCreator = {
         e.stopPropagation();
         if (window.Emby && window.Emby.Page) {
           Emby.Page.show(
-            `/details?id=${itemId}&serverId=${STATE.jellyfinData.serverId}`
+            `/details?id=${itemId}&serverId=${STATE.jellyfinData.serverId}`,
           );
         } else {
           window.location.href = `#/details?id=${itemId}&serverId=${STATE.jellyfinData.serverId}`;
@@ -1369,6 +1438,11 @@ const SlideCreator = {
    * @param {string} itemId - Item ID
    * @returns {Promise<HTMLElement>} Created slide element
    */
+  /**
+   * Creates a slide for an item and adds it to the container
+   * @param {string} itemId - Item ID
+   * @returns {Promise<HTMLElement>} Created slide element
+   */
   async createSlideForItemId(itemId) {
     try {
       if (STATE.slideshow.createdSlides[itemId]) {
@@ -1376,19 +1450,47 @@ const SlideCreator = {
       }
 
       const container = SlideUtils.getOrCreateSlidesContainer();
-
       const item = await ApiUtils.fetchItemDetails(itemId);
 
-      const slideElement = this.createSlideElement(
+      const { slide, videoId, trailerContainer } = this.createSlideElement(
         item,
-        item.Type === "Movie" ? "Movie" : "TV Show"
+        item.Type === "Movie" ? "Movie" : "TV Show",
       );
 
-      container.appendChild(slideElement);
-
+      container.appendChild(slide);
       STATE.slideshow.createdSlides[itemId] = true;
 
-      return slideElement;
+      if (videoId) {
+        loadYouTubeAPI().then((YT) => {
+          if (!document.getElementById(`trailer-${itemId}`)) return;
+
+          STATE.slideshow.players[itemId] = new YT.Player(
+            `yt-player-${itemId}`,
+            {
+              videoId: videoId,
+              playerVars: {
+                autoplay: 0,
+                controls: 0,
+                rel: 0,
+                fs: 0,
+                showinfo: 0,
+                modestbranding: 1,
+              },
+              events: {
+                onStateChange: (e) =>
+                  SlideshowManager.onPlayerStateChange(
+                    e,
+                    itemId,
+                    trailerContainer,
+                  ),
+                onReady: (e) => e.target.mute(),
+              },
+            },
+          );
+        });
+      }
+
+      return slide;
     } catch (error) {
       console.error("Error creating slide for item:", error, itemId);
       return null;
@@ -1434,7 +1536,7 @@ const SlideshowManager = {
       activeDotIndex = currentIndex;
     } else {
       activeDotIndex = Math.floor(
-        (currentIndex % numDots) * (numDots / numDots)
+        (currentIndex % numDots) * (numDots / numDots),
       );
     }
 
@@ -1447,94 +1549,150 @@ const SlideshowManager = {
     });
   },
 
+  toggleMute() {
+    STATE.slideshow.isMuted = !STATE.slideshow.isMuted;
+
+    const btnIcon = document.querySelector(".volume-toggle i");
+    if (btnIcon)
+      btnIcon.textContent = STATE.slideshow.isMuted
+        ? "volume_off"
+        : "volume_up";
+
+    const currentId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    const player = STATE.slideshow.players[currentId];
+
+    if (player && typeof player.setVolume === "function") {
+      if (STATE.slideshow.isMuted) {
+        player.mute();
+      } else {
+        player.unMute();
+        player.setVolume(50);
+      }
+    }
+  },
+
   /**
    * Updates current slide to the specified index
    * @param {number} index - Slide index to display
    */
 
   async updateCurrentSlide(index) {
-    if (STATE.slideshow.isTransitioning) {
-      return;
+    if (STATE.slideshow.isTransitioning) return;
+
+    if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
+
+    const prevItemId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    if (prevItemId && STATE.slideshow.players[prevItemId]) {
+      try {
+        if (
+          typeof STATE.slideshow.players[prevItemId].pauseVideo === "function"
+        ) {
+          STATE.slideshow.players[prevItemId].pauseVideo();
+          if (
+            typeof STATE.slideshow.players[prevItemId].seekTo === "function"
+          ) {
+            STATE.slideshow.players[prevItemId].seekTo(0);
+          }
+        }
+
+        const prevSlide = document.querySelector(
+          `.slide[data-item-id="${prevItemId}"]`,
+        );
+        if (prevSlide) {
+          prevSlide
+            .querySelector(".video-container")
+            ?.classList.remove("active");
+          prevSlide.querySelector(".backdrop")?.classList.remove("with-video");
+          prevSlide
+            .querySelector(".plot-container")
+            ?.classList.remove("with-video");
+        }
+      } catch (e) {}
     }
 
     STATE.slideshow.isTransitioning = true;
+    const container = SlideUtils.getOrCreateSlidesContainer();
+    index = Math.max(0, Math.min(index, STATE.slideshow.totalItems - 1));
+    const currentItemId = STATE.slideshow.itemIds[index];
 
-    let previousVisibleSlide;
-    try {
-      const container = SlideUtils.getOrCreateSlidesContainer();
-      const totalItems = STATE.slideshow.totalItems;
+    let currentSlide = document.querySelector(
+      `.slide[data-item-id="${currentItemId}"]`,
+    );
+    if (!currentSlide)
+      currentSlide = await SlideCreator.createSlideForItemId(currentItemId);
 
-      index = Math.max(0, Math.min(index, totalItems - 1));
-      const currentItemId = STATE.slideshow.itemIds[index];
+    const prevVisible = container.querySelector(".slide.active");
+    if (prevVisible) prevVisible.classList.remove("active");
 
-      let currentSlide = document.querySelector(
-        `.slide[data-item-id="${currentItemId}"]`
-      );
-      if (!currentSlide) {
-        currentSlide = await SlideCreator.createSlideForItemId(currentItemId);
-        this.upgradeSlideImageQuality(currentSlide);
+    currentSlide.classList.add("active");
+    if (CONFIG.slideAnimationEnabled) {
+      currentSlide.querySelector(".backdrop")?.classList.add("animate");
+      currentSlide.querySelector(".logo")?.classList.add("animate");
+    }
 
-        if (!currentSlide) {
-          console.error(`Failed to create slide for item ${currentItemId}`);
-          STATE.slideshow.isTransitioning = false;
-          setTimeout(() => this.nextSlide(), 500);
-          return;
-        }
-      }
+    STATE.slideshow.currentSlideIndex = index;
+    this.updateDots();
+    this.preloadAdjacentSlides(index);
 
-      previousVisibleSlide = container.querySelector(".slide.active");
+    const itemData = STATE.slideshow.loadedItems[currentItemId];
+    const hasTrailerData =
+      CONFIG.enableTrailers &&
+      itemData &&
+      itemData.RemoteTrailers &&
+      itemData.RemoteTrailers.length > 0;
 
-      if (previousVisibleSlide) {
-        previousVisibleSlide.classList.remove("active");
-      }
-
-      currentSlide.classList.add("active");
-
-      if (CONFIG.slideAnimationEnabled) {
-        currentSlide.querySelector(".backdrop").classList.add("animate");
-        currentSlide.querySelector(".logo").classList.add("animate");
-      }
-
-      STATE.slideshow.currentSlideIndex = index;
-
-      if (index === 0 || !previousVisibleSlide) {
-        const dotsContainer = container.querySelector(".dots-container");
-        if (dotsContainer) {
-          dotsContainer.style.opacity = "1";
-        }
-      }
-
+    if (hasTrailerData) {
       setTimeout(() => {
-        const allSlides = container.querySelectorAll(".slide");
-        allSlides.forEach((slide) => {
-          if (slide !== currentSlide) {
-            slide.classList.remove("active");
+        if (
+          STATE.slideshow.currentSlideIndex === index &&
+          !STATE.slideshow.isPaused
+        ) {
+          const player = STATE.slideshow.players[currentItemId];
+
+          if (player && typeof player.playVideo === "function") {
+            try {
+              if (STATE.slideshow.isMuted) {
+                player.mute();
+              } else {
+                player.unMute();
+                player.setVolume(50);
+              }
+
+              player.seekTo(0);
+              player.playVideo();
+            } catch (e) {
+              fallbackToTimer();
+            }
+          } else {
+            fallbackToTimer();
           }
-        });
-      }, CONFIG.fadeTransitionDuration);
+        }
+      }, 3500);
+    } else {
+      fallbackToTimer();
+    }
 
-      this.preloadAdjacentSlides(index);
-      this.updateDots();
-
-      if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
+    function fallbackToTimer() {
+      if (!STATE.slideshow.isPaused && STATE.slideshow.slideInterval) {
         STATE.slideshow.slideInterval.restart();
       }
-
-      this.pruneSlideCache();
-    } catch (error) {
-      console.error("Error updating current slide:", error);
-    } finally {
-      setTimeout(() => {
-        STATE.slideshow.isTransitioning = false;
-
-        if (previousVisibleSlide && CONFIG.slideAnimationEnabled) {
-          const prevBackdrop = previousVisibleSlide.querySelector(".backdrop");
-          const prevLogo = previousVisibleSlide.querySelector(".logo");
-          if (prevBackdrop) prevBackdrop.classList.remove("animate");
-          if (prevLogo) prevLogo.classList.remove("animate");
-        }
-      }, CONFIG.fadeTransitionDuration);
     }
+
+    setTimeout(() => {
+      STATE.slideshow.isTransitioning = false;
+      if (prevVisible && CONFIG.slideAnimationEnabled) {
+        prevVisible.querySelector(".backdrop")?.classList.remove("animate");
+        prevVisible.querySelector(".logo")?.classList.remove("animate");
+      }
+    }, CONFIG.fadeTransitionDuration);
+    setTimeout(() => {
+      if (STATE.slideshow.isTransitioning) {
+        console.warn("Forcing transition unlock");
+        STATE.slideshow.isTransitioning = false;
+      }
+    }, 2000);
   },
 
   /**
@@ -1548,8 +1706,6 @@ const SlideshowManager = {
     const images = slide.querySelectorAll("img.low-quality");
     images.forEach((img) => {
       const highQualityUrl = img.getAttribute("data-high-quality");
-
-      // Prevent duplicate requests if already using high quality
       if (highQualityUrl && img.src !== highQualityUrl) {
         addThrottledRequest(highQualityUrl, () => {
           img.src = highQualityUrl;
@@ -1613,10 +1769,21 @@ const SlideshowManager = {
 
       const distance = Math.abs(index - currentIndex);
       if (distance > keepRange) {
+        if (STATE.slideshow.players[itemId]) {
+          try {
+            if (typeof STATE.slideshow.players[itemId].destroy === "function") {
+              STATE.slideshow.players[itemId].destroy();
+            }
+          } catch (e) {
+            console.warn("Error destroying player:", e);
+          }
+          delete STATE.slideshow.players[itemId];
+        }
+
         delete STATE.slideshow.loadedItems[itemId];
 
         const slide = document.querySelector(
-          `.slide[data-item-id="${itemId}"]`
+          `.slide[data-item-id="${itemId}"]`,
         );
         if (slide) slide.remove();
 
@@ -1630,21 +1797,34 @@ const SlideshowManager = {
   togglePause() {
     STATE.slideshow.isPaused = !STATE.slideshow.isPaused;
     const pauseButton = document.querySelector(".pause-button");
+
+    const currentId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    const player = STATE.slideshow.players[currentId];
+
     if (STATE.slideshow.isPaused) {
-      STATE.slideshow.slideInterval.stop();
+      if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
+
       pauseButton.innerHTML = '<i class="material-icons">play_arrow</i>';
       const playLabel = LocalizationUtils.getLocalizedString("Play", "Play");
       pauseButton.setAttribute("aria-label", playLabel);
       pauseButton.setAttribute("title", playLabel);
+      if (player && typeof player.pauseVideo === "function") {
+        player.pauseVideo();
+      }
     } else {
-      STATE.slideshow.slideInterval.start();
+      if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.start();
       pauseButton.innerHTML = '<i class="material-icons">pause</i>';
       const pauseLabel = LocalizationUtils.getLocalizedString(
         "ButtonPause",
-        "Pause"
+        "Pause",
       );
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
+
+      if (player && typeof player.playVideo === "function") {
+        player.playVideo();
+      }
     }
   },
 
@@ -1661,7 +1841,7 @@ const SlideshowManager = {
       (e) => {
         touchStartX = e.changedTouches[0].screenX;
       },
-      { passive: true }
+      { passive: true },
     );
 
     container.addEventListener(
@@ -1670,7 +1850,7 @@ const SlideshowManager = {
         touchEndX = e.changedTouches[0].screenX;
         this.handleSwipe(touchStartX, touchEndX);
       },
-      { passive: true }
+      { passive: true },
     );
   },
 
@@ -1721,7 +1901,7 @@ const SlideshowManager = {
           e.preventDefault();
           break;
 
-        case " ": // Space bar
+        case " ":
           this.togglePause();
           e.preventDefault();
           break;
@@ -1744,6 +1924,27 @@ const SlideshowManager = {
     });
   },
 
+  onPlayerStateChange(event, itemId, container) {
+    const slide = document.querySelector(`.slide[data-item-id="${itemId}"]`);
+    if (!slide) return;
+    const backdrop = slide.querySelector(".backdrop");
+    const plotContainer = slide.querySelector(".plot-container");
+
+    if (event.data === YT.PlayerState.PLAYING) {
+      if (container) container.classList.add("active");
+      if (backdrop) backdrop.classList.add("with-video");
+      if (plotContainer) plotContainer.classList.add("with-video");
+      if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
+    } else if (event.data === YT.PlayerState.ENDED) {
+      if (container) container.classList.remove("active");
+      if (backdrop) backdrop.classList.remove("with-video");
+      if (plotContainer) plotContainer.classList.remove("with-video");
+      if (STATE.slideshow.slideInterval)
+        STATE.slideshow.slideInterval.restart();
+      this.nextSlide();
+    }
+  },
+
   /**
    * Loads slideshow data and initializes the slideshow
    */
@@ -1763,6 +1964,14 @@ const SlideshowManager = {
       STATE.slideshow.totalItems = itemIds.length;
 
       this.createPaginationDots();
+
+      STATE.slideshow.slideInterval = new SlideTimer(() => {
+        if (!STATE.slideshow.isPaused) {
+          this.nextSlide();
+        }
+      }, CONFIG.shuffleInterval);
+
+      STATE.slideshow.slideInterval.stop();
 
       await this.updateCurrentSlide(0);
 
@@ -1817,6 +2026,16 @@ const initArrowNavigation = () => {
     },
   });
 
+  const volumeBtn = SlideUtils.createElement("div", {
+    className: "volume-toggle",
+    innerHTML: '<i class="material-icons">volume_off</i>',
+    onclick: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      SlideshowManager.toggleMute();
+    },
+  });
+
   const pauseButton = SlideUtils.createElement("div", {
     className: "pause-button",
     innerHTML: '<i class="material-icons">pause</i>',
@@ -1830,9 +2049,7 @@ const initArrowNavigation = () => {
     },
   });
 
-  container.appendChild(leftArrow);
-  container.appendChild(rightArrow);
-  container.appendChild(pauseButton);
+  container.append(leftArrow, rightArrow, volumeBtn, pauseButton);
 
   const showArrows = () => {
     leftArrow.style.display = "block";
@@ -1873,7 +2090,7 @@ const initArrowNavigation = () => {
 
       arrowTimeout = setTimeout(hideArrows, 2000);
     },
-    { passive: true }
+    { passive: true },
   );
 };
 
@@ -1923,7 +2140,7 @@ const slidesInit = async () => {
       {
         rootMargin: "50px",
         threshold: 0.1,
-      }
+      },
     );
 
     const observeSlideImages = () => {

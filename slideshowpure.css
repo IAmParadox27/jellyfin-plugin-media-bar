@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.8
+ * Jellyfin Slideshow by M0RPH3US v4.0.0
  */
 
 @import url(https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&display=swap);
@@ -115,8 +115,72 @@
   transition: width 0.2s ease-in-out;
 }
 
-.layout-mobile .splashLogo {
-height: 12%;
+.splashLogo {
+  height: 12%;
+}
+
+.video-container {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 0;
+  z-index: 2;
+  overflow: hidden;
+  transition:
+    width 0.5s ease-in-out,
+    opacity 0.5s ease-in-out;
+  opacity: 0;
+  pointer-events: none;
+  mask-image:
+    linear-gradient(to right, transparent 10%, black 30%),
+    linear-gradient(to top, transparent 2%, rgba(0, 0, 0, 0.5) 6%, black 8%);
+
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 10%, black 30%),
+    linear-gradient(to top, transparent 2%, rgba(0, 0, 0, 0.5) 6%, black 8%);
+
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+.video-container.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+}
+
+.volume-toggle {
+  position: absolute;
+  top: 5rem;
+  right: 3.5rem;
+  cursor: pointer;
+  color: white;
+  z-index: 10;
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.volume-toggle:hover {
+  opacity: 0.9;
+}
+
+.volume-toggle i {
+  font-size: 1.5rem;
+}
+
+@media (max-width: 1599px) {
+  .volume-toggle {
+    top: 8rem;
+  }
+  .volume-toggle i {
+    font-size: 2rem;
+  }
 }
 
 .backdrop.low-quality {
@@ -259,11 +323,13 @@ height: 12%;
   height: 100%;
   transition: opacity 0.5s ease-in-out;
   z-index: 0;
+  pointer-events: none;
 }
 
 .slide.active {
   opacity: 1;
   z-index: 1;
+  pointer-events: auto;
 }
 
 .backdrop-container {
@@ -294,18 +360,24 @@ height: 12%;
   object-position: center 20%;
   border-radius: 5px;
   z-index: 3;
-  mask-image: linear-gradient(
-    to top,
-    #fff0 2%,
-    rgb(0 0 0 / 0.5) 6%,
-    #000000 8%
-  );
-  -webkit-mask-image: linear-gradient(
-    to top,
-    #fff0 2%,
-    rgb(0 0 0 / 0.5) 6%,
-    #000000 8%
-  );
+  transition:
+    width 0.5s ease-in-out,
+    mask-image 0.5s ease-in-out,
+    -webkit-mask-image 0.5s ease-in-out;
+}
+
+.backdrop.with-video {
+  width: 100%;
+  mask-image:
+    linear-gradient(to top, #fff0 2%, rgb(0 0 0 / 0.5) 6%, #000000 8%),
+    linear-gradient(to right, black 30%, transparent 85%);
+
+  -webkit-mask-image:
+    linear-gradient(to top, #fff0 2%, rgb(0 0 0 / 0.5) 6%, #000000 8%),
+    linear-gradient(to right, black 30%, transparent 85%);
+
+  mask-composite: source-in;
+  -webkit-mask-composite: source-in;
 }
 
 .backdrop-overlay {
@@ -392,6 +464,11 @@ height: 12%;
   justify-content: flex-start;
   text-align: justify;
   box-sizing: border-box;
+  transition: width 0.5s ease-in-out;
+}
+
+.plot-container.with-video {
+  width: 45%;
 }
 
 .plot {
@@ -543,7 +620,6 @@ height: 12%;
   font-weight: 500;
 }
 
-/* Star Icon Styling */
 .community-rating-star {
   color: #f2b01e;
   font-size: 1.4em;
@@ -557,8 +633,6 @@ height: 12%;
   align-items: center;
 }
 
-/* Rotten Tomatoes Critic Rating Styles */
-
 .critic-rating {
   -webkit-align-items: center;
   align-items: center;
@@ -566,8 +640,6 @@ height: 12%;
   min-height: 1.2em;
   gap: 0.25em;
 }
-
-/**/
 
 .age-rating {
   display: flex;
@@ -611,6 +683,19 @@ height: 12%;
     right: 0%;
     width: 100%;
     height: 100%;
+  }
+
+  .video-container {
+    display: none !important;
+  }
+
+  .volume-toggle i {
+    display: none !important;
+  }
+
+  .backdrop.with-video {
+    width: 100% !important;
+    mask-image: none !important;
   }
 
   .backdrop {
