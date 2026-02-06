@@ -1,5 +1,5 @@
-﻿<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.css" />
-<script defer src="https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.js"></script>
+﻿<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/n00bcodr/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.css" />
+<script defer src="https://cdn.jsdelivr.net/gh/n00bcodr/jellyfin-plugin-media-bar@{{Config.VersionString}}/slideshowpure.js"></script>
 <script defer>
     if (typeof MediaBarConfigHandler == 'undefined') {
         const MediaBarConfigHandler = {
@@ -58,7 +58,7 @@
         let waitingForPluginInterval = setInterval(function () {
             if (window.slideshowPure && window.slideshowPure.CONFIG && window.ApiClient) {
                 clearInterval(waitingForPluginInterval);
-                
+
                 MediaBarConfigHandler.init().then(r => {
                     console.log('Loaded Media Bar plugin config into plugin javascript');
                 });
