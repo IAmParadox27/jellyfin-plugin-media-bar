@@ -132,6 +132,17 @@
                         </label>
                         <div class="fieldDescription">Do the slides animate while they're visible? (the zooming in effect, can be quite performance heavy)</div>
                     </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 1.5em;">
+                        <label class="emby-checkbox-label">
+                            <input data-id="chkEnableTrailers" id="chkEnableTrailers" type="checkbox" is="emby-checkbox" class="emby-checkbox">
+                            <span class="checkboxLabel">Enable Trailers?</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Enable trailer playback on the media bar slides?</div>
+                    </div>
                 </div>
             </div>
             <br />
@@ -198,6 +209,7 @@
                             PreloadCount: parseInt(document.querySelector("[data-id=numPreloadCount]").value, 10),
                             FadeTransitionDuration: parseInt(document.querySelector("[data-id=numFadeTransitionDuration]").value, 10),
                             SlideAnimationEnabled: document.querySelector("[data-id=chkSlideAnimationEnabled]").checked,
+                            EnableTrailers: document.querySelector("[data-id=chkEnableTrailers]").checked,
                         }
                     };
 
@@ -235,6 +247,7 @@
                             document.querySelector("[data-id=numPreloadCount]").value = config.WebConfig.PreloadCount;
                             document.querySelector("[data-id=numFadeTransitionDuration]").value = config.WebConfig.FadeTransitionDuration;
                             document.querySelector("[data-id=chkSlideAnimationEnabled]").checked = config.WebConfig.SlideAnimationEnabled;
+                            document.querySelector("[data-id=chkEnableTrailers]").checked = config.WebConfig.EnableTrailers;
                         })
                         .catch(function (error) {
                             console.error(error);
