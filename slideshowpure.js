@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.0
+ * Jellyfin Slideshow by M0RPH3US v4.0.1
  */
 
 //Core Module Configuration
@@ -51,6 +51,7 @@ const STATE = {
     players: {},
     ytPromise: null,
     isMuted: true,
+    isVideoPlaying: false,
   },
 };
 
@@ -1596,6 +1597,7 @@ const SlideshowManager = {
             STATE.slideshow.players[prevItemId].seekTo(0);
           }
         }
+        STATE.slideshow.isVideoPlaying = false;
 
         const prevSlide = document.querySelector(
           `.slide[data-item-id="${prevItemId}"]`,
@@ -1738,6 +1740,10 @@ const SlideshowManager = {
   },
 
   nextSlide() {
+    if (STATE.slideshow.isVideoPlaying) {
+      return;
+    }
+
     const currentIndex = STATE.slideshow.currentSlideIndex;
     const totalItems = STATE.slideshow.totalItems;
 
@@ -1931,17 +1937,24 @@ const SlideshowManager = {
     const plotContainer = slide.querySelector(".plot-container");
 
     if (event.data === YT.PlayerState.PLAYING) {
+      STATE.slideshow.isVideoPlaying = true;
       if (container) container.classList.add("active");
       if (backdrop) backdrop.classList.add("with-video");
       if (plotContainer) plotContainer.classList.add("with-video");
       if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
     } else if (event.data === YT.PlayerState.ENDED) {
+      STATE.slideshow.isVideoPlaying = false;
       if (container) container.classList.remove("active");
       if (backdrop) backdrop.classList.remove("with-video");
       if (plotContainer) plotContainer.classList.remove("with-video");
       if (STATE.slideshow.slideInterval)
         STATE.slideshow.slideInterval.restart();
       this.nextSlide();
+    } else if (
+      event.data === YT.PlayerState.PAUSED ||
+      event.data === YT.PlayerState.CUED
+    ) {
+      STATE.slideshow.isVideoPlaying = false;
     }
   },
 
@@ -2189,6 +2202,8 @@ const slidesInit = async () => {
 
     initArrowNavigation();
 
+    initPageVisibilityHandler();
+
     VisibilityObserver.init();
 
     console.log("✅ Enhanced Jellyfin Slideshow initialized successfully");
@@ -2196,6 +2211,65 @@ const slidesInit = async () => {
     console.error("Error initializing slideshow:", error);
     STATE.slideshow.hasInitialized = false;
   }
+};
+
+/**
+ * Initialize page visibility handling to pause when tab is inactive
+ */
+const initPageVisibilityHandler = () => {
+  let wasVideoPlayingBeforeHide = false;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      console.log("Tab inactive - pausing slideshow and videos");
+      wasVideoPlayingBeforeHide = STATE.slideshow.isVideoPlaying;
+      if (STATE.slideshow.slideInterval) {
+        STATE.slideshow.slideInterval.stop();
+      }
+      const currentItemId =
+        STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+      if (currentItemId && STATE.slideshow.players[currentItemId]) {
+        const player = STATE.slideshow.players[currentItemId];
+        if (typeof player.pauseVideo === "function") {
+          try {
+            player.pauseVideo();
+            STATE.slideshow.isVideoPlaying = false;
+          } catch (e) {
+            console.warn("Error pausing video on tab hide:", e);
+          }
+        }
+      }
+    } else {
+      console.log("Tab active - resuming slideshow");
+      if (!STATE.slideshow.isPaused) {
+        const currentItemId =
+          STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+        if (
+          wasVideoPlayingBeforeHide &&
+          currentItemId &&
+          STATE.slideshow.players[currentItemId]
+        ) {
+          const player = STATE.slideshow.players[currentItemId];
+          if (typeof player.playVideo === "function") {
+            try {
+              player.playVideo();
+              STATE.slideshow.isVideoPlaying = true;
+            } catch (e) {
+              console.warn("Error resuming video on tab show:", e);
+              if (STATE.slideshow.slideInterval) {
+                STATE.slideshow.slideInterval.start();
+              }
+            }
+          }
+        } else {
+          if (STATE.slideshow.slideInterval) {
+            STATE.slideshow.slideInterval.start();
+          }
+        }
+        wasVideoPlayingBeforeHide = false;
+      }
+    }
+  });
 };
 
 window.slideshowPure = {
