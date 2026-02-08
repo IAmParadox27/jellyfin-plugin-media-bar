@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.1.0
+ * Jellyfin Slideshow by M0RPH3US v4.0.0
  */
 
 //Core Module Configuration
@@ -51,8 +51,6 @@ const STATE = {
     players: {},
     ytPromise: null,
     isMuted: true,
-    pageVisible: true,
-    trailerPlaying: false,
   },
 };
 
@@ -1020,38 +1018,6 @@ class SlideTimer {
  * Observer for handling slideshow visibility based on current page
  */
 const VisibilityObserver = {
-  /**
-   * Handles page visibility changes (tab switching, minimizing)
-   */
-  handlePageVisibilityChange() {
-    STATE.slideshow.pageVisible = !document.hidden;
-
-    const currentId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
-    const player = STATE.slideshow.players[currentId];
-
-    if (document.hidden) {
-      // Page is hidden (tab switched or minimized)
-      if (player && typeof player.pauseVideo === 'function') {
-        try {
-          player.pauseVideo();
-          console.log('🎬 Trailer paused due to tab switch');
-        } catch (e) {
-          console.warn('Error pausing trailer:', e);
-        }
-      }
-    } else {
-      // Page is visible again
-      if (player && typeof player.playVideo === 'function' && STATE.slideshow.trailerPlaying && !STATE.slideshow.isPaused) {
-        try {
-          player.playVideo();
-          console.log('🎬 Trailer resumed after tab switch');
-        } catch (e) {
-          console.warn('Error resuming trailer:', e);
-        }
-      }
-    }
-  },
-
   updateVisibility() {
     const activeTab = document.querySelector(".emby-tab-button-active");
     const container = document.getElementById("slides-container");
@@ -1080,11 +1046,6 @@ const VisibilityObserver = {
    * Initializes visibility observer
    */
   init() {
-    // Add page visibility change listener for tab switching
-    document.addEventListener('visibilitychange', () => {
-      this.handlePageVisibilityChange();
-    });
-    console.log('✅ Page visibility observer initialized');
     const observer = new MutationObserver(this.updateVisibility);
     observer.observe(document.body, { childList: true, subtree: true });
 
@@ -1636,9 +1597,6 @@ const SlideshowManager = {
           }
         }
 
-        // Reset trailer playing state when switching slides
-        STATE.slideshow.trailerPlaying = false;
-
         const prevSlide = document.querySelector(
           `.slide[data-item-id="${prevItemId}"]`,
         );
@@ -1689,8 +1647,7 @@ const SlideshowManager = {
       setTimeout(() => {
         if (
           STATE.slideshow.currentSlideIndex === index &&
-          !STATE.slideshow.isPaused &&
-          STATE.slideshow.pageVisible
+          !STATE.slideshow.isPaused
         ) {
           const player = STATE.slideshow.players[currentItemId];
 
@@ -1706,15 +1663,11 @@ const SlideshowManager = {
               player.seekTo(0);
               player.playVideo();
             } catch (e) {
-              console.warn('Error playing trailer, falling back to timer:', e);
               fallbackToTimer();
             }
           } else {
             fallbackToTimer();
           }
-        } else {
-          // Page not visible or paused, use timer
-          fallbackToTimer();
         }
       }, 3500);
     } else {
@@ -1858,7 +1811,6 @@ const SlideshowManager = {
       pauseButton.setAttribute("title", playLabel);
       if (player && typeof player.pauseVideo === "function") {
         player.pauseVideo();
-        // Keep trailerPlaying state - we'll resume when unpaused
       }
     } else {
       if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.start();
@@ -1870,8 +1822,7 @@ const SlideshowManager = {
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
 
-      if (player && typeof player.playVideo === "function" && STATE.slideshow.trailerPlaying) {
-        // Resume trailer if it was playing
+      if (player && typeof player.playVideo === "function") {
         player.playVideo();
       }
     }
@@ -1983,22 +1934,13 @@ const SlideshowManager = {
       if (container) container.classList.add("active");
       if (backdrop) backdrop.classList.add("with-video");
       if (plotContainer) plotContainer.classList.add("with-video");
-      // Stop the auto-advance timer while trailer is playing
       if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.trailerPlaying = true;
-      console.log('🎬 Trailer playing - slide timer stopped');
-    } else if (event.data === YT.PlayerState.PAUSED) {
-      // Only set trailerPlaying to false if paused by user action (not by visibility change)
-      if (STATE.slideshow.pageVisible) {
-        STATE.slideshow.trailerPlaying = false;
-      }
     } else if (event.data === YT.PlayerState.ENDED) {
       if (container) container.classList.remove("active");
       if (backdrop) backdrop.classList.remove("with-video");
       if (plotContainer) plotContainer.classList.remove("with-video");
-      STATE.slideshow.trailerPlaying = false;
-      console.log('🎬 Trailer ended - advancing to next slide');
-      // Move to next slide when trailer ends
+      if (STATE.slideshow.slideInterval)
+        STATE.slideshow.slideInterval.restart();
       this.nextSlide();
     }
   },
