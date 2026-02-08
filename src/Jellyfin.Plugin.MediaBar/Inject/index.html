@@ -51,6 +51,9 @@
                 if (config.FadeTransitionDuration >= 0) {
                     window.slideshowPure.CONFIG.fadeTransitionDuration = config.FadeTransitionDuration;
                 }
+                if (config.EnableTrailers !== undefined && config.EnableTrailers !== null) {
+                    window.slideshowPure.CONFIG.enableTrailers = config.EnableTrailers;
+                }
                 window.slideshowPure.CONFIG.slideAnimationEnabled = config.SlideAnimationEnabled;
             }
         };
