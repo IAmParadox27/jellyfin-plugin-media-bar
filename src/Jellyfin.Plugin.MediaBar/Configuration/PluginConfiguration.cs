@@ -46,6 +46,8 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
         public int FadeTransitionDuration { get; set; } = -1;
 
         public bool SlideAnimationEnabled { get; set; } = true;
+
+        public bool EnableTrailers { get; set; } = true;
     }
 
     public class ImageSvgs
