@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.1
+ * Jellyfin Slideshow by M0RPH3US v4.0.4
  */
 
 @import url(https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&display=swap);
@@ -50,7 +50,7 @@
   opacity: 1;
   transition: opacity 0.3s ease-in-out;
   overflow: hidden;
-  /*will-change: opacity;*/
+  will-change: opacity;
 }
 
 .bar-loading.hide {
@@ -119,7 +119,7 @@
   height: 12%;
 }
 
-.video-container {
+/* .video-container {
   position: absolute;
   top: 0;
   right: 0;
@@ -152,6 +152,50 @@
 .video-player {
   width: 100%;
   height: 100%;
+} */
+
+.video-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100vw;
+  height: 56.25vw;
+  min-height: 100vh;
+  min-width: 177.77vh;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+  mask-image:
+    linear-gradient(to right, transparent 10%, black 30%),
+    linear-gradient(to top, transparent 15%, rgba(0, 0, 0, 0.5) 20%, black 30%);
+
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 10%, black 30%),
+    linear-gradient(to top, transparent 15%, rgba(0, 0, 0, 0.5) 20%, black 30%);
+
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+.video-container.active {
+  opacity: 1;
+}
+
+.video-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.video-player iframe {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .volume-toggle {
@@ -361,13 +405,14 @@
   border-radius: 5px;
   z-index: 3;
   transition:
-    width 0.5s ease-in-out,
-    mask-image 0.5s ease-in-out,
-    -webkit-mask-image 0.5s ease-in-out;
+    width 1.5s ease-in-out,
+    mask-image 1.5s ease-in-out,
+    -webkit-mask-image 1.5s ease-in-out;
+  will-change: width;
 }
 
 .backdrop.with-video {
-  width: 100%;
+  width: 40%;
   mask-image:
     linear-gradient(to top, #fff0 2%, rgb(0 0 0 / 0.5) 6%, #000000 8%),
     linear-gradient(to right, black 30%, transparent 85%);

@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.1
+ * Jellyfin Slideshow by M0RPH3US v4.0.4
  */
 
 //Core Module Configuration
@@ -783,6 +783,34 @@ const ApiUtils = {
   },
 
   /**
+   * API utilities for fetching SponsorBlock JSON data
+   */
+
+  async getSkipSegments(videoId) {
+    try {
+      const categories = '["intro","sponsor","selfpromo","interaction"]';
+      const response = await fetch(
+        `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`,
+      );
+
+      if (response.status === 200) {
+        const segments = await response.json();
+        const introSegment = segments.find((s) => s.segment[0] < 5);
+
+        if (introSegment) {
+          console.log(
+            `[SponsorBlock] Skipping intro for ${videoId}. Start at: ${introSegment.segment[1]}`,
+          );
+          return Math.ceil(introSegment.segment[1]);
+        }
+      }
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  /**
    * Fetch item IDs from the list file
    * @returns {Promise<Array>} Array of item IDs
    */
@@ -1019,6 +1047,8 @@ class SlideTimer {
  * Observer for handling slideshow visibility based on current page
  */
 const VisibilityObserver = {
+  wasVisible: false,
+
   updateVisibility() {
     const activeTab = document.querySelector(".emby-tab-button-active");
     const container = document.getElementById("slides-container");
@@ -1032,26 +1062,73 @@ const VisibilityObserver = {
 
     container.style.display = isVisible ? "block" : "none";
 
-    if (isVisible) {
+    if (isVisible && !this.wasVisible) {
+      const currentItemId =
+        STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+      const currentSlide = document.querySelector(
+        `.slide[data-item-id="${currentItemId}"]`,
+      );
+      const player = STATE.slideshow.players[currentItemId];
+
+      if (currentSlide && player) {
+        const trailerContainer = currentSlide.querySelector(".video-container");
+        const backdrop = currentSlide.querySelector(".backdrop");
+        const plotContainer = currentSlide.querySelector(".plot-container");
+        if (trailerContainer) trailerContainer.classList.remove("active");
+        if (backdrop) backdrop.classList.remove("with-video");
+        if (plotContainer) plotContainer.classList.remove("with-video");
+
+        try {
+          if (typeof player.pauseVideo === "function") {
+            player.pauseVideo();
+          }
+          if (typeof player.seekTo === "function") {
+            player.seekTo(0);
+          }
+        } catch (e) {
+          console.warn(`Failed to reset player for ${currentItemId}:`, e);
+        }
+      }
+
       if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
         STATE.slideshow.slideInterval.start();
       }
-    } else {
+    } else if (!isVisible && this.wasVisible) {
+      // Transitioning FROM visible TO hidden
       if (STATE.slideshow.slideInterval) {
         STATE.slideshow.slideInterval.stop();
       }
+
+      Object.keys(STATE.slideshow.players).forEach((itemId) => {
+        const player = STATE.slideshow.players[itemId];
+        if (player && typeof player.pauseVideo === "function") {
+          try {
+            player.pauseVideo();
+          } catch (e) {
+            console.warn(`Failed to pause player for ${itemId}:`, e);
+          }
+        }
+      });
+    }
+    this.wasVisible = isVisible;
+  },
+
+  handleClick(event) {
+    const target = event.target;
+    if (
+      target.closest(".emby-tab-button") ||
+      target.closest(".pageTabButton") ||
+      target.closest(".navMenuOption")
+    ) {
+      VisibilityObserver.updateVisibility();
     }
   },
 
-  /**
-   * Initializes visibility observer
-   */
   init() {
-    const observer = new MutationObserver(this.updateVisibility);
+    const observer = new MutationObserver(this.updateVisibility.bind(this));
     observer.observe(document.body, { childList: true, subtree: true });
-
-    document.body.addEventListener("click", this.updateVisibility);
-    window.addEventListener("hashchange", this.updateVisibility);
+    document.body.addEventListener("click", this.handleClick.bind(this));
+    window.addEventListener("hashchange", this.updateVisibility.bind(this));
 
     this.updateVisibility();
   },
@@ -1144,10 +1221,14 @@ const SlideCreator = {
       } catch (e) {}
 
       if (videoId) {
+        // trailerContainer = SlideUtils.createElement("div", {
+        //   className: "video-container",
+        //   id: `trailer-${item.Id}`,
+        //   style: { width: `calc(100vh * 1.777)` },
+        // });
         trailerContainer = SlideUtils.createElement("div", {
           className: "video-container",
           id: `trailer-${item.Id}`,
-          style: { width: `calc(100vh * 1.777)` },
         });
 
         const playerDiv = SlideUtils.createElement("div", {
@@ -1461,7 +1542,39 @@ const SlideCreator = {
       container.appendChild(slide);
       STATE.slideshow.createdSlides[itemId] = true;
 
+      // if (videoId) {
+      //   loadYouTubeAPI().then((YT) => {
+      //     if (!document.getElementById(`trailer-${itemId}`)) return;
+
+      //     STATE.slideshow.players[itemId] = new YT.Player(
+      //       `yt-player-${itemId}`,
+      //       {
+      //         videoId: videoId,
+      //         playerVars: {
+      //           autoplay: 0,
+      //           controls: 0,
+      //           rel: 0,
+      //           fs: 0,
+      //           showinfo: 0,
+      //           modestbranding: 1,
+      //         },
+      //         events: {
+      //           onStateChange: (e) =>
+      //             SlideshowManager.onPlayerStateChange(
+      //               e,
+      //               itemId,
+      //               trailerContainer,
+      //             ),
+      //           onReady: (e) => e.target.mute(),
+      //         },
+      //       },
+      //     );
+      //   });
+      // }
+
       if (videoId) {
+        const startTime = await ApiUtils.getSkipSegments(videoId);
+
         loadYouTubeAPI().then((YT) => {
           if (!document.getElementById(`trailer-${itemId}`)) return;
 
@@ -1472,10 +1585,13 @@ const SlideCreator = {
               playerVars: {
                 autoplay: 0,
                 controls: 0,
-                rel: 0,
+                disablekb: 1,
                 fs: 0,
-                showinfo: 0,
+                iv_load_policy: 3,
                 modestbranding: 1,
+                rel: 0,
+                showinfo: 0,
+                start: startTime,
               },
               events: {
                 onStateChange: (e) =>
@@ -1740,9 +1856,9 @@ const SlideshowManager = {
   },
 
   nextSlide() {
-    if (STATE.slideshow.isVideoPlaying) {
-      return;
-    }
+    // if (STATE.slideshow.isVideoPlaying) {
+    //   return;
+    // }
 
     const currentIndex = STATE.slideshow.currentSlideIndex;
     const totalItems = STATE.slideshow.totalItems;
@@ -1979,7 +2095,7 @@ const SlideshowManager = {
       this.createPaginationDots();
 
       STATE.slideshow.slideInterval = new SlideTimer(() => {
-        if (!STATE.slideshow.isPaused) {
+        if (!STATE.slideshow.isPaused && !STATE.slideshow.isVideoPlaying) {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
