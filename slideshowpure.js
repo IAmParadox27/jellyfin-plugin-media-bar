@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.3
+ * Jellyfin Slideshow by M0RPH3US v4.0.4
  */
 
 //Core Module Configuration
@@ -2094,7 +2094,7 @@ const SlideshowManager = {
       this.createPaginationDots();
 
       STATE.slideshow.slideInterval = new SlideTimer(() => {
-        if (!STATE.slideshow.isPaused) {
+        if (!STATE.slideshow.isPaused && !STATE.slideshow.isVideoPlaying) {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
