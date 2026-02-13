@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.2
+ * Jellyfin Slideshow by M0RPH3US v4.0.3
  */
 
 //Core Module Configuration
@@ -782,6 +782,34 @@ const ApiUtils = {
   },
 
   /**
+   * API utilities for fetching SponsorBlock JSON data
+   */
+
+  async getSkipSegments(videoId) {
+    try {
+      const categories = '["intro","sponsor","selfpromo","interaction"]';
+      const response = await fetch(
+        `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`,
+      );
+
+      if (response.status === 200) {
+        const segments = await response.json();
+        const introSegment = segments.find((s) => s.segment[0] < 5);
+
+        if (introSegment) {
+          console.log(
+            `[SponsorBlock] Skipping intro for ${videoId}. Start at: ${introSegment.segment[1]}`,
+          );
+          return Math.ceil(introSegment.segment[1]);
+        }
+      }
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  /**
    * Fetch item IDs from the list file
    * @returns {Promise<Array>} Array of item IDs
    */
@@ -1192,10 +1220,14 @@ const SlideCreator = {
       } catch (e) {}
 
       if (videoId) {
+        // trailerContainer = SlideUtils.createElement("div", {
+        //   className: "video-container",
+        //   id: `trailer-${item.Id}`,
+        //   style: { width: `calc(100vh * 1.777)` },
+        // });
         trailerContainer = SlideUtils.createElement("div", {
           className: "video-container",
           id: `trailer-${item.Id}`,
-          style: { width: `calc(100vh * 1.777)` },
         });
 
         const playerDiv = SlideUtils.createElement("div", {
@@ -1509,7 +1541,39 @@ const SlideCreator = {
       container.appendChild(slide);
       STATE.slideshow.createdSlides[itemId] = true;
 
+      // if (videoId) {
+      //   loadYouTubeAPI().then((YT) => {
+      //     if (!document.getElementById(`trailer-${itemId}`)) return;
+
+      //     STATE.slideshow.players[itemId] = new YT.Player(
+      //       `yt-player-${itemId}`,
+      //       {
+      //         videoId: videoId,
+      //         playerVars: {
+      //           autoplay: 0,
+      //           controls: 0,
+      //           rel: 0,
+      //           fs: 0,
+      //           showinfo: 0,
+      //           modestbranding: 1,
+      //         },
+      //         events: {
+      //           onStateChange: (e) =>
+      //             SlideshowManager.onPlayerStateChange(
+      //               e,
+      //               itemId,
+      //               trailerContainer,
+      //             ),
+      //           onReady: (e) => e.target.mute(),
+      //         },
+      //       },
+      //     );
+      //   });
+      // }
+
       if (videoId) {
+        const startTime = await ApiUtils.getSkipSegments(videoId);
+
         loadYouTubeAPI().then((YT) => {
           if (!document.getElementById(`trailer-${itemId}`)) return;
 
@@ -1520,10 +1584,13 @@ const SlideCreator = {
               playerVars: {
                 autoplay: 0,
                 controls: 0,
-                rel: 0,
+                disablekb: 1,
                 fs: 0,
-                showinfo: 0,
+                iv_load_policy: 3,
                 modestbranding: 1,
+                rel: 0,
+                showinfo: 0,
+                start: startTime,
               },
               events: {
                 onStateChange: (e) =>
@@ -1788,9 +1855,9 @@ const SlideshowManager = {
   },
 
   nextSlide() {
-    if (STATE.slideshow.isVideoPlaying) {
-      return;
-    }
+    // if (STATE.slideshow.isVideoPlaying) {
+    //   return;
+    // }
 
     const currentIndex = STATE.slideshow.currentSlideIndex;
     const totalItems = STATE.slideshow.totalItems;
