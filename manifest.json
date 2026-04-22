@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "08f615ea-2107-4f04-89cc-091035f54448",
+    "name": "Media Bar",
+    "description": "Adds a customizable media showcase bar to the Jellyfin home page with per-user personalized recommendations.",
+    "overview": "Featured content bar with built-in recommendation engine.",
+    "owner": "Jycreyn",
+    "category": "General",
+    "versions": [
+      {
+        "version": "2.5.0.0",
+        "changelog": "Add per-user recommendation engine based on watch history.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Jycreyn/jellyfin-plugin-media-bar/releases/download/v2.5.0/media-bar_2.5.0.0.zip",
+        "checksum": "6c9734a1f2ecd445c88f90ec446d95ed",
+        "timestamp": "2026-04-22T13:00:00Z"
+      }
+    ]
+  }
+]
