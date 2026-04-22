@@ -1,13 +1,17 @@
-﻿using System.Reflection;
+﻿using System.Globalization;
+using System.Reflection;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Jellyfin.Extensions;
 using Jellyfin.Plugin.MediaBar.Attributes;
 using Jellyfin.Plugin.MediaBar.Configuration;
 using Jellyfin.Plugin.MediaBar.Model;
+using Jellyfin.Plugin.MediaBar.ScheduledTasks;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.MediaBar.Helpers
@@ -28,7 +32,27 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             {
                 return payload.Contents;
             }
-            
+
+            // If recommendations are enabled, try to serve the per-user recommendation playlist
+            if (MediaBarPlugin.Instance.Configuration.RecommendationsEnabled)
+            {
+                Guid? requestingUserId = GetRequestingUserId();
+                if (requestingUserId.HasValue)
+                {
+                    string recoName = UpdateRecommendationsTask.PlaylistPrefix
+                        + requestingUserId.Value.ToString("N", CultureInfo.InvariantCulture);
+
+                    Playlist? recoPlaylist = playlistManager.GetPlaylists(requestingUserId.Value)
+                        .FirstOrDefault(x => x.Name == recoName);
+
+                    if (recoPlaylist is not null)
+                    {
+                        return BuildPlaylistResponse(recoPlaylist, requestingUserId.Value, userManager, shuffle: false);
+                    }
+                }
+            }
+
+            // Fall back to the globally configured playlist (existing behaviour)
             IEnumerable<Guid> allUserIds = userManager.UsersIds;
 
             Playlist? playlist = null;
@@ -51,15 +75,19 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 return payload.Contents;
             }
 
+            return BuildPlaylistResponse(playlist, userIdToUse.Value, userManager, shuffle: true);
+        }
+
+        private static string BuildPlaylistResponse(Playlist playlist, Guid userId, IUserManager userManager, bool shuffle)
+        {
             IEnumerable<Tuple<LinkedChild, BaseItem>> itemsRaw = playlist.GetManageableItems()
-                .Where(i => i.Item2.IsVisible(userManager.GetUserById(userIdToUse.Value)));
+                .Where(i => i.Item2.IsVisible(userManager.GetUserById(userId)));
 
             StringWriter stringWriter = new StringWriter();
+            stringWriter.WriteLine(playlist.Name);
 
-            stringWriter.WriteLine(MediaBarPlugin.Instance.Configuration.AvatarsPlaylist);
-                
             List<Guid> idsWritten = new List<Guid>();
-                
+
             foreach (Tuple<LinkedChild, BaseItem> item in itemsRaw)
             {
                 BaseItem itemToUse = item.Item2;
@@ -74,15 +102,43 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 }
             }
 
-            idsWritten.Shuffle();
+            if (shuffle)
+            {
+                idsWritten.Shuffle();
+            }
 
             foreach (Guid id in idsWritten)
             {
                 // For some reason the JF api doesn't treat GUIDs correctly
                 stringWriter.WriteLine(id.ToString().Replace("-", ""));
             }
-            
+
             return stringWriter.ToString();
+        }
+
+        private static Guid? GetRequestingUserId()
+        {
+            try
+            {
+                IHttpContextAccessor httpContextAccessor =
+                    MediaBarPlugin.Instance.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
+
+                string? userIdString = httpContextAccessor.HttpContext?.User
+                    ?.FindFirst("Jellyfin-userId")?.Value
+                    ?? httpContextAccessor.HttpContext?.User
+                    ?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (Guid.TryParse(userIdString, out Guid userId))
+                {
+                    return userId;
+                }
+            }
+            catch
+            {
+                // IHttpContextAccessor not available — not critical, fall through to global playlist
+            }
+
+            return null;
         }
         
         public static string IndexHtml(PatchRequestPayload payload)
