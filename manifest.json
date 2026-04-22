@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "2.5.1.0",
+        "changelog": "Add Recommendations tab in plugin settings UI.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Jycreyn/jellyfin-plugin-media-bar/releases/download/v2.5.1/media-bar_2.5.1.0.zip",
+        "checksum": "52e641f8593d3fa4deefe9401168b5f5",
+        "timestamp": "2026-04-22T14:00:00Z"
+      },
+      {
         "version": "2.5.0.0",
         "changelog": "Add per-user recommendation engine based on watch history.",
         "targetAbi": "10.11.0.0",
