@@ -28,12 +28,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
         
         private static string? AvatarsList(PatchRequestPayload payload, IPlaylistManager playlistManager, IUserManager userManager)
         {
-            if (MediaBarPlugin.Instance.Configuration.UseAvatarsFile)
-            {
-                return payload.Contents;
-            }
-
-            // If recommendations are enabled, try to serve the per-user recommendation playlist
+            // Recommendations take priority over all other sources
             if (MediaBarPlugin.Instance.Configuration.RecommendationsEnabled)
             {
                 Guid? requestingUserId = GetRequestingUserId();
@@ -50,6 +45,11 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                         return BuildPlaylistResponse(recoPlaylist, requestingUserId.Value, userManager, shuffle: false);
                     }
                 }
+            }
+
+            if (MediaBarPlugin.Instance.Configuration.UseAvatarsFile)
+            {
+                return payload.Contents;
             }
 
             // Fall back to the globally configured playlist (existing behaviour)
