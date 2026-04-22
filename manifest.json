@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "2.5.2.0",
+        "changelog": "Fix: recommendations now correctly override UseAvatarsFile mode.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Jycreyn/jellyfin-plugin-media-bar/releases/download/v2.5.2/media-bar_2.5.0.0.zip",
+        "checksum": "a8c7a38a1c835b9b1635745f9c3cf485",
+        "timestamp": "2026-04-22T16:30:00Z"
+      },
+      {
         "version": "2.5.1.0",
         "changelog": "Add Recommendations tab in plugin settings UI.",
         "targetAbi": "10.11.0.0",
