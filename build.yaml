@@ -1,7 +1,7 @@
 ---
 name: "Media Bar"
 guid: "08f615ea-2107-4f04-89cc-091035f54448"
-version: "2.5.0.0"
+version: "2.5.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Adds a featured content bar to the Jellyfin home page with per-user recommendations."
