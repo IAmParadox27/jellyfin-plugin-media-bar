@@ -811,28 +811,51 @@ const ApiUtils = {
   },
 
   /**
-   * Fetch item IDs from the list file
-   * @returns {Promise<Array>} Array of item IDs
+   * Fetch item IDs via the MediaBar backend, which applies per-user recommendation
+   * logic before falling back to list.txt or the configured playlist.
+   * @returns {Promise<{ids: Array, isRecommendation: boolean}>}
    */
   async fetchItemIdsFromList() {
     try {
-      const listFileName = `${STATE.jellyfinData.serverAddress}/web/avatars/list.txt?userId=${STATE.jellyfinData.userId}`;
-      const response = await fetch(listFileName);
-
-      if (!response.ok) {
-        console.warn("list.txt not found or inaccessible. Using random items.");
-        return [];
+      // Fetch list.txt so we can pass it to the backend as a fallback payload
+      const listFileName = `${STATE.jellyfinData.serverAddress}/web/avatars/list.txt`;
+      let listContents = "";
+      try {
+        const listResponse = await fetch(listFileName);
+        if (listResponse.ok) {
+          listContents = await listResponse.text();
+        }
+      } catch (_) {
+        // list.txt absent — backend will use the configured playlist or random
       }
 
-      const text = await response.text();
-      return text
-        .split("\n")
-        .map((id) => id.trim())
-        .filter((id) => id)
-        .slice(1);
+      // POST to MediaBar/Avatar/List — the backend injects recommendations when enabled
+      const recoResponse = await fetch(
+        `${STATE.jellyfinData.serverAddress}/MediaBar/Avatar/List`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...this.getAuthHeaders(),
+          },
+          body: JSON.stringify({ contents: listContents }),
+        },
+      );
+
+      if (!recoResponse.ok) {
+        console.warn("MediaBar/Avatar/List unavailable, falling back to list.txt.");
+        return { ids: listContents.split("\n").map((id) => id.trim()).filter(Boolean).slice(1), isRecommendation: false };
+      }
+
+      const text = await recoResponse.text();
+      const lines = text.split("\n").map((id) => id.trim()).filter(Boolean);
+      const playlistName = lines[0] ?? "";
+      const ids = lines.slice(1);
+      const isRecommendation = playlistName.startsWith("_mbr_");
+      return { ids, isRecommendation };
     } catch (error) {
-      console.error("Error fetching list.txt:", error);
-      return [];
+      console.error("Error fetching item list:", error);
+      return { ids: [], isRecommendation: false };
     }
   },
 
@@ -2081,13 +2104,17 @@ const SlideshowManager = {
     try {
       STATE.slideshow.isLoading = true;
 
-      let itemIds = await ApiUtils.fetchItemIdsFromList();
+      const { ids: fetchedIds, isRecommendation } = await ApiUtils.fetchItemIdsFromList();
+      let itemIds = fetchedIds;
 
       if (itemIds.length === 0) {
         itemIds = await ApiUtils.fetchItemIdsFromServer();
       }
 
-      itemIds = SlideUtils.shuffleArray(itemIds);
+      // Preserve recommendation order; shuffle everything else
+      if (!isRecommendation) {
+        itemIds = SlideUtils.shuffleArray(itemIds);
+      }
 
       STATE.slideshow.itemIds = itemIds;
       STATE.slideshow.totalItems = itemIds.length;
