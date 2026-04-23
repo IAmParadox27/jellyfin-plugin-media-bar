@@ -104,13 +104,13 @@ namespace Jellyfin.Plugin.MediaBar.ScheduledTasks
                 .Where(m => !_userDataManager.GetUserData(user, m).Played)
                 .ToList();
 
-            // Genre frequency map from watch history
+            // Genre frequency map from watch history (percentage-based: count / total watched)
             var genreFreq = watched
                 .SelectMany(m => m.Genres ?? [])
                 .GroupBy(g => g, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
 
-            var maxFreq = genreFreq.Values.DefaultIfEmpty(1).Max();
+            double totalWatched = watched.Count > 0 ? watched.Count : 1;
 
             var now = DateTime.UtcNow;
             var topIds = unwatched
@@ -123,10 +123,11 @@ namespace Jellyfin.Plugin.MediaBar.ScheduledTasks
 
                     if (movie.Genres is { Length: > 0 })
                     {
+                        // Sum percentage affinity across all matching genres — no cap, rewards multi-genre matches
                         var genreScore = movie.Genres
                             .Where(g => genreFreq.ContainsKey(g))
-                            .Sum(g => genreFreq[g] / (double)maxFreq);
-                        score += Math.Min(genreScore, 1.0) * config.RecommendationGenreWeight;
+                            .Sum(g => genreFreq[g] / totalWatched);
+                        score += genreScore * config.RecommendationGenreWeight;
                     }
 
                     var age = (now - movie.DateCreated).TotalDays;

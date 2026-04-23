@@ -301,9 +301,9 @@
                             document.querySelector("[data-id=chkEnableTrailers]").checked = config.WebConfig.EnableTrailers;
                             document.querySelector("[data-id=chkRecommendationsEnabled]").checked = config.RecommendationsEnabled || false;
                             document.querySelector("[data-id=numTopN]").value = config.RecommendationTopN || 15;
-                            document.querySelector("[data-id=numRatingWeight]").value = config.RecommendationRatingWeight != null ? config.RecommendationRatingWeight : 0.5;
-                            document.querySelector("[data-id=numGenreWeight]").value = config.RecommendationGenreWeight != null ? config.RecommendationGenreWeight : 0.3;
-                            document.querySelector("[data-id=numRecencyWeight]").value = config.RecommendationRecencyWeight != null ? config.RecommendationRecencyWeight : 0.2;
+                            document.querySelector("[data-id=numRatingWeight]").value = config.RecommendationRatingWeight != null ? config.RecommendationRatingWeight : 0.3;
+                            document.querySelector("[data-id=numGenreWeight]").value = config.RecommendationGenreWeight != null ? config.RecommendationGenreWeight : 0.6;
+                            document.querySelector("[data-id=numRecencyWeight]").value = config.RecommendationRecencyWeight != null ? config.RecommendationRecencyWeight : 0.1;
                             document.querySelector("[data-id=numRecencyDays]").value = config.RecommendationRecencyDays || 90;
                         })
                         .catch(function (error) {

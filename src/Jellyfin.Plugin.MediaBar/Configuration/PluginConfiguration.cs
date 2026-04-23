@@ -23,11 +23,11 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
 
         public int RecommendationTopN { get; set; } = 15;
 
-        public double RecommendationRatingWeight { get; set; } = 0.5;
+        public double RecommendationRatingWeight { get; set; } = 0.3;
 
-        public double RecommendationGenreWeight { get; set; } = 0.3;
+        public double RecommendationGenreWeight { get; set; } = 0.6;
 
-        public double RecommendationRecencyWeight { get; set; } = 0.2;
+        public double RecommendationRecencyWeight { get; set; } = 0.1;
 
         public int RecommendationRecencyDays { get; set; } = 90;
 
