@@ -1,0 +1,31 @@
+name: Publish Plugin
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build with JPRM
+        id: jprm
+        uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
+        with:
+          dotnet-target: net9.0
+
+      - name: Upload artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.jprm.outputs.artifact }}
