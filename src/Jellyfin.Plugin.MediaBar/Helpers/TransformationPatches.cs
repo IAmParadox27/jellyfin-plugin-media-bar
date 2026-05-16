@@ -42,7 +42,8 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
 
                     if (recoPlaylist is not null)
                     {
-                        return BuildPlaylistResponse(recoPlaylist, requestingUserId.Value, userManager, shuffle: false);
+                        IUserDataManager userDataManager = MediaBarPlugin.Instance.ServiceProvider.GetRequiredService<IUserDataManager>();
+                        return BuildPlaylistResponse(recoPlaylist, requestingUserId.Value, userManager, userDataManager, shuffle: false);
                     }
                 }
             }
@@ -75,13 +76,17 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 return payload.Contents;
             }
 
-            return BuildPlaylistResponse(playlist, userIdToUse.Value, userManager, shuffle: true);
+            return BuildPlaylistResponse(playlist, userIdToUse.Value, userManager, userDataManager: null, shuffle: true);
         }
 
-        private static string BuildPlaylistResponse(Playlist playlist, Guid userId, IUserManager userManager, bool shuffle)
+        private static string BuildPlaylistResponse(Playlist playlist, Guid userId, IUserManager userManager, IUserDataManager? userDataManager, bool shuffle)
         {
+            var user = userManager.GetUserById(userId);
             IEnumerable<Tuple<LinkedChild, BaseItem>> itemsRaw = playlist.GetManageableItems()
-                .Where(i => i.Item2.IsVisible(userManager.GetUserById(userId)));
+                .Where(i => i.Item2.IsVisible(user));
+
+            if (userDataManager is not null && user is not null)
+                itemsRaw = itemsRaw.Where(i => !userDataManager.GetUserData(user, i.Item2).Played);
 
             StringWriter stringWriter = new StringWriter();
             stringWriter.WriteLine(playlist.Name);
