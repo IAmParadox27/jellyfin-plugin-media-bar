@@ -20,6 +20,7 @@
         <div style="margin-bottom: 1.5em;">
             <button class="jellyfin-tab-button active" data-tab="general" style="background: none; border: none; color: #fff; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid #fff; padding: 0.5em 1em;"><h3>General Settings</h3></button>
             <button class="jellyfin-tab-button" data-tab="web-config" style="background: none; border: none; color: #ccc; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid transparent; padding: 0.5em 1em;"><h3>Web Config Settings</h3></button>
+            <button class="jellyfin-tab-button" data-tab="recommendations" style="background: none; border: none; color: #ccc; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid transparent; padding: 0.5em 1em;"><h3>Recommendations</h3></button>
         </div>
 
         <form class="mediaBarConfigurationForm">
@@ -145,6 +146,50 @@
                     </div>
                 </div>
             </div>
+            <div id="recommendations" class="jellyfin-tab-content" style="display: none;">
+                <div class="inputContainer" style="margin-bottom:1em;">
+                    <p class="fieldDescription">When enabled, a daily task scores each user's unwatched movies (rating, genre affinity, recency) and generates a personalized playlist for the Media Bar. Each user sees different content.<br/>Make sure to disable "Use physical avatars file" and run the task at least once.</p>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 1.5em;">
+                    <label class="emby-checkbox-label">
+                        <input type="checkbox" id="chkRecommendationsEnabled" is="emby-checkbox" class="emby-checkbox" data-id="chkRecommendationsEnabled" />
+                        <span class="checkboxLabel">Enable per-user recommendations</span>
+                        <span class="checkboxOutline">
+                            <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                            <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                        </span>
+                    </label>
+                    <div class="fieldDescription">Generate personalized recommendations for each user based on their watch history.</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="numTopN">Number of items per user</label>
+                    <input id="numTopN" type="number" is="emby-input" class="emby-input" data-id="numTopN" min="5" max="50" />
+                    <div class="fieldDescription">How many movies to include in each user's recommendation playlist (5–50).</div>
+                </div>
+                <br/>
+                <h3 style="margin-bottom: 0.5em;">Scoring weights</h3>
+                <p class="fieldDescription" style="margin-bottom:1em;">Each factor contributes independently — they don't need to sum to 1.</p>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="numRatingWeight">Community rating weight</label>
+                    <input id="numRatingWeight" type="number" is="emby-input" class="emby-input" data-id="numRatingWeight" min="0" max="1" step="0.05" />
+                    <div class="fieldDescription">Importance of the IMDB/TMDB score (0 = ignored, 1 = strong).</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="numGenreWeight">Genre affinity weight</label>
+                    <input id="numGenreWeight" type="number" is="emby-input" class="emby-input" data-id="numGenreWeight" min="0" max="1" step="0.05" />
+                    <div class="fieldDescription">Importance of matching genres from the user's watch history.</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="numRecencyWeight">Recency weight</label>
+                    <input id="numRecencyWeight" type="number" is="emby-input" class="emby-input" data-id="numRecencyWeight" min="0" max="1" step="0.05" />
+                    <div class="fieldDescription">Bonus for movies recently added to the library.</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="numRecencyDays">Recency window (days)</label>
+                    <input id="numRecencyDays" type="number" is="emby-input" class="emby-input" data-id="numRecencyDays" min="7" max="365" />
+                    <div class="fieldDescription">Movies added within this many days are eligible for the recency bonus.</div>
+                </div>
+            </div>
             <br />
             <button id="saveConfig" is="emby-button" type="submit" class="emby-button raised button-submit block">
                 <span>Save</span>
@@ -191,6 +236,12 @@
                         UseAvatarsFile: document.querySelector("[data-id=chkUseAvatarsFile]").checked,
                         AvatarsPlaylist: document.querySelector("[data-id=txtAvatarsPlaylist]").value,
                         VersionString: document.querySelector("[data-id=txtVersionString]").value,
+                        RecommendationsEnabled: document.querySelector("[data-id=chkRecommendationsEnabled]").checked,
+                        RecommendationTopN: parseInt(document.querySelector("[data-id=numTopN]").value, 10),
+                        RecommendationRatingWeight: parseFloat(document.querySelector("[data-id=numRatingWeight]").value),
+                        RecommendationGenreWeight: parseFloat(document.querySelector("[data-id=numGenreWeight]").value),
+                        RecommendationRecencyWeight: parseFloat(document.querySelector("[data-id=numRecencyWeight]").value),
+                        RecommendationRecencyDays: parseInt(document.querySelector("[data-id=numRecencyDays]").value, 10),
                         WebConfig: {
                             ImageSvgs: {
                                 ImdbLogo: null,
@@ -248,6 +299,12 @@
                             document.querySelector("[data-id=numFadeTransitionDuration]").value = config.WebConfig.FadeTransitionDuration;
                             document.querySelector("[data-id=chkSlideAnimationEnabled]").checked = config.WebConfig.SlideAnimationEnabled;
                             document.querySelector("[data-id=chkEnableTrailers]").checked = config.WebConfig.EnableTrailers;
+                            document.querySelector("[data-id=chkRecommendationsEnabled]").checked = config.RecommendationsEnabled || false;
+                            document.querySelector("[data-id=numTopN]").value = config.RecommendationTopN || 15;
+                            document.querySelector("[data-id=numRatingWeight]").value = config.RecommendationRatingWeight != null ? config.RecommendationRatingWeight : 0.3;
+                            document.querySelector("[data-id=numGenreWeight]").value = config.RecommendationGenreWeight != null ? config.RecommendationGenreWeight : 0.6;
+                            document.querySelector("[data-id=numRecencyWeight]").value = config.RecommendationRecencyWeight != null ? config.RecommendationRecencyWeight : 0.1;
+                            document.querySelector("[data-id=numRecencyDays]").value = config.RecommendationRecencyDays || 90;
                         })
                         .catch(function (error) {
                             console.error(error);
