@@ -29,7 +29,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 return payload.Contents;
             }
             
-            IEnumerable<Guid> allUserIds = userManager.UsersIds;
+            IEnumerable<Guid> allUserIds = userManager.GetUsersIds();
 
             Playlist? playlist = null;
             Guid? userIdToUse = null;
