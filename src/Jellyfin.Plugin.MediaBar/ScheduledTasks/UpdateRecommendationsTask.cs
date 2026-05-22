@@ -52,7 +52,7 @@ namespace Jellyfin.Plugin.MediaBar.ScheduledTasks
                 return;
             }
 
-            var allUsers = _userManager.Users.ToList();
+            var allUsers = _userManager.GetUsers().ToList();
             if (allUsers.Count == 0)
             {
                 return;

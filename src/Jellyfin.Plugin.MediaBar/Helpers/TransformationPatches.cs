@@ -54,7 +54,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             }
 
             // Fall back to the globally configured playlist (existing behaviour)
-            IEnumerable<Guid> allUserIds = userManager.UsersIds;
+            IEnumerable<Guid> allUserIds = userManager.GetUsersIds();
 
             Playlist? playlist = null;
             Guid? userIdToUse = null;
