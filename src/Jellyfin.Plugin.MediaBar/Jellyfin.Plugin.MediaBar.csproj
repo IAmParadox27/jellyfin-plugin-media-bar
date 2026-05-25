@@ -34,9 +34,13 @@
         <None Include="JellyfinVersionSpecific/10.11.0/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
     </ItemGroup>
-    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11'))">
+    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) OR ('$(JellyfinVersion)' == '10.11.9')">
         <None Include="JellyfinVersionSpecific/10.11/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11/*.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(JellyfinVersion)' != '10.11.9'">
+        <None Include="JellyfinVersionSpecific/10.11.9/*.cs" />
+        <Compile Remove="JellyfinVersionSpecific/10.11.9/*.cs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -51,9 +55,9 @@
         <None Include="..\..\slideshowpure.js" />
         <None Include="..\..\slideshowpure.css" />
     </ItemGroup>
-    
+
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar')">
-        <Exec Condition="'$(JellyfinVersion)' == '10.11.1'" Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar&quot; /y" />
+        <Exec Condition="$(JellyfinVersion.StartsWith('10.11'))" Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar&quot; /y" />
         <Exec Condition="'$(JellyfinVersion)' == '10.10.7'"     Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_10_7\plugins\MediaBar&quot; /y" />
     </Target>
 </Project>

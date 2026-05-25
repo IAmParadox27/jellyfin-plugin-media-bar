@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Jellyfin.Extensions;
 using Jellyfin.Plugin.MediaBar.Attributes;
 using Jellyfin.Plugin.MediaBar.Configuration;
+using Jellyfin.Plugin.MediaBar.JellyfinVersionSpecific;
 using Jellyfin.Plugin.MediaBar.Model;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -29,7 +30,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 return payload.Contents;
             }
             
-            IEnumerable<Guid> allUserIds = userManager.UsersIds;
+            IEnumerable<Guid> allUserIds = userManager.GetAllUserIds();
 
             Playlist? playlist = null;
             Guid? userIdToUse = null;
