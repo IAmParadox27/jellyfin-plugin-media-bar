@@ -421,7 +421,7 @@
     linear-gradient(to top, #fff0 2%, rgb(0 0 0 / 0.5) 6%, #000000 8%),
     linear-gradient(to right, black 30%, transparent 85%);
 
-  mask-composite: source-in;
+  mask-composite: intersect;
   -webkit-mask-composite: source-in;
 }
 
