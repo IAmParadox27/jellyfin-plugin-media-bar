@@ -35,11 +35,11 @@
         <None Include="JellyfinVersionSpecific/10.11.0/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
     </ItemGroup>
-    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) OR ('$(JellyfinNugetVersion)' == '10.11.9')">
+    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) OR ('$(JellyfinNugetVersion)' == '10.11.9') OR ('$(JellyfinNugetVersion)' == '10.11.11')">
         <None Include="JellyfinVersionSpecific/10.11/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11/*.cs" />
     </ItemGroup>
-    <ItemGroup Condition="'$(JellyfinNugetVersion)' != '10.11.9'">
+    <ItemGroup Condition="'$(JellyfinNugetVersion)' != '10.11.9' AND ('$(JellyfinNugetVersion)' != '10.11.11')">
         <None Include="JellyfinVersionSpecific/10.11.9/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11.9/*.cs" />
     </ItemGroup>
