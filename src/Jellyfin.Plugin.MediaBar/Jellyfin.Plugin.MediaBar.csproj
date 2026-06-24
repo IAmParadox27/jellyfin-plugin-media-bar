@@ -43,6 +43,21 @@
         <None Include="JellyfinVersionSpecific/10.11.9/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11.9/*.cs" />
     </ItemGroup>
+    
+    <Target Name="GenerateAssemblyMetadata_JellyfinVersion" BeforeTargets="BeforeCompile">
+        <ItemGroup>
+            <AssemblyAttribute Include="Jellyfin.Plugin.MediaBar.Attributes.JellyfinVersionAttribute">
+                <_Parameter1>$(JellyfinVersion)</_Parameter1>
+            </AssemblyAttribute>
+        </ItemGroup>
+        <WriteCodeFragment
+                Language="C#"
+                OutputFile="$(IntermediateOutputPath)AssemblyMetadata.g.cs"
+                AssemblyAttributes="@(AssemblyAttribute)" />
+        <ItemGroup>
+            <Compile Include="$(IntermediateOutputPath)AssemblyMetadata.g.cs" />
+        </ItemGroup>
+    </Target>
 
     <ItemGroup>
       <EmbeddedResource Include="Configuration\config.html" />
