@@ -6,8 +6,6 @@
 name: Mark stale issues and pull requests
 
 on:
-  schedule:
-    - cron: '20 7 * * *'  # Runs daily at 07:20 UTC
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
