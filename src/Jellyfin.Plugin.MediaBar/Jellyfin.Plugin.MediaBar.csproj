@@ -4,13 +4,10 @@
         <JellyfinVersion>12.0.0</JellyfinVersion>
         <JellyfinNugetVersion Condition="!$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
         <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
-        <JellyfinNugetVersion Condition="'$(JellyfinVersion)' == '10.11.1'">10.11.0</JellyfinNugetVersion>
-        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11.0'))">10.11.0</JellyfinNugetVersion>
         <JellyfinNugetVersion Condition="'$(JellyfinVersion)' == '10.11.10'">10.11.9</JellyfinNugetVersion>
-        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('12.0.0'))">12.0.0-rc1</JellyfinNugetVersion>
+        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('12.0.0'))">12.0.0-rc2</JellyfinNugetVersion>
         <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
         <TargetFramework Condition="$(JellyfinVersion.StartsWith('12.'))">net10.0</TargetFramework>
-        <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -26,17 +23,7 @@
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
     
-    <!-- 10.10.7 Specific Code from non 10.10.7 builds -->
-    <ItemGroup Condition="'$(JellyfinVersion)' != '10.10.7'">
-        <None Include="JellyfinVersionSpecific/10.10.7/*.cs" />
-        <Compile Remove="JellyfinVersionSpecific/10.10.7/*.cs" />
-    </ItemGroup>
-
     <!-- Remove 10.11.0 Specific Code from non 10.11.0 builds -->
-    <ItemGroup Condition="'$(JellyfinVersion)' != '10.11.0'">
-        <None Include="JellyfinVersionSpecific/10.11.0/*.cs" />
-        <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
-    </ItemGroup>
     <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) OR ('$(JellyfinNugetVersion)' == '10.11.9') OR ('$(JellyfinNugetVersion)' == '10.11.11')">
         <None Include="JellyfinVersionSpecific/10.11/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11/*.cs" />
