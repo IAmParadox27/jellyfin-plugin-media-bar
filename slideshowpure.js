@@ -1384,7 +1384,7 @@ const SlideCreator = {
         const milliseconds = runtime / 10000;
         const currentTime = new Date();
         const endTime = new Date(currentTime.getTime() + milliseconds);
-        const options = { hour: "2-digit", minute: "2-digit", hour12: false };
+        const options = { hour: "2-digit", minute: "2-digit" };
         const formattedEndTime = endTime.toLocaleTimeString([], options);
         const endsAtText = LocalizationUtils.getLocalizedString(
           "EndsAtValue",
