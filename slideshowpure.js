@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.6
+ * Jellyfin Slideshow by M0RPH3US v5.0.1
  */
 
 //Core Module Configuration
@@ -22,6 +22,7 @@ const CONFIG = {
   fadeTransitionDuration: 500,
   slideAnimationEnabled: true,
   enableTrailers: true,
+  youtubeApiLoadTimeoutMs: 8000,
 };
 
 // State management
@@ -63,13 +64,45 @@ const loadYouTubeAPI = () => {
       resolve(window.YT);
       return;
     }
-    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
-    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-      const tag = document.createElement("script");
+
+    let timeout;
+    let settled = false;
+    const previousReady = window.onYouTubeIframeAPIReady;
+    const finish = (YT = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(YT && YT.Player ? YT : null);
+    };
+
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previousReady === "function") {
+        previousReady();
+      }
+      finish(window.YT);
+    };
+
+    let tag = document.querySelector('script[src*="youtube.com/iframe_api"]');
+    if (!tag) {
+      tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
+      tag.async = true;
+      tag.onerror = () => {
+        console.warn(
+          "YouTube iframe API failed to load; continuing without trailers.",
+        );
+        finish();
+      };
       const firstScriptTag = document.getElementsByTagName("script")[0];
       firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
     }
+
+    timeout = setTimeout(() => {
+      console.warn(
+        "Timed out loading YouTube iframe API; continuing without trailers.",
+      );
+      finish();
+    }, CONFIG.youtubeApiLoadTimeoutMs);
   });
   return STATE.slideshow.ytPromise;
 };
@@ -375,7 +408,9 @@ const waitForApiClientAndInitialize = () => {
         initJellyfinData(async () => {
           console.log("✅ Jellyfin API client initialized successfully");
           await initLocalization();
-          await loadYouTubeAPI();
+          if (CONFIG.enableTrailers) {
+            await loadYouTubeAPI();
+          }
           slidesInit();
         });
       } else {
@@ -1518,6 +1553,7 @@ const SlideCreator = {
         const startTime = await ApiUtils.getSkipSegments(videoId);
 
         loadYouTubeAPI().then((YT) => {
+          if (!YT) return;
           if (!document.getElementById(`trailer-${itemId}`)) return;
 
           STATE.slideshow.players[itemId] = new YT.Player(
