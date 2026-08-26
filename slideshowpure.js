@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v4.0.6
+ * Jellyfin Slideshow by M0RPH3US v5.0.1
  */
 
 //Core Module Configuration
@@ -22,6 +22,22 @@ const CONFIG = {
   fadeTransitionDuration: 500,
   slideAnimationEnabled: true,
   enableTrailers: true,
+  // Name fragments identifying alternate cuts of a trailer: accessibility
+  // variants and social crops. Matched case insensitively against the
+  // RemoteTrailers entry name. These are demoted within their tier, so an
+  // alternate cut loses to an ordinary entry of the same tier but still
+  // beats lower tier promo clips, and an item whose only trailer is an
+  // alternate cut still plays something.
+  trailerAlternateCutTerms: [
+    "sign language",
+    "asl trailer",
+    "audio description",
+    "audio described",
+    "described audio",
+    "vertical",
+  ],
+  syncPageBackdrop: true,
+  youtubeApiLoadTimeoutMs: 8000,
 };
 
 // State management
@@ -63,13 +79,45 @@ const loadYouTubeAPI = () => {
       resolve(window.YT);
       return;
     }
-    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
-    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-      const tag = document.createElement("script");
+
+    let timeout;
+    let settled = false;
+    const previousReady = window.onYouTubeIframeAPIReady;
+    const finish = (YT = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(YT && YT.Player ? YT : null);
+    };
+
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previousReady === "function") {
+        previousReady();
+      }
+      finish(window.YT);
+    };
+
+    let tag = document.querySelector('script[src*="youtube.com/iframe_api"]');
+    if (!tag) {
+      tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
+      tag.async = true;
+      tag.onerror = () => {
+        console.warn(
+          "YouTube iframe API failed to load; continuing without trailers.",
+        );
+        finish();
+      };
       const firstScriptTag = document.getElementsByTagName("script")[0];
       firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
     }
+
+    timeout = setTimeout(() => {
+      console.warn(
+        "Timed out loading YouTube iframe API; continuing without trailers.",
+      );
+      finish();
+    }, CONFIG.youtubeApiLoadTimeoutMs);
   });
   return STATE.slideshow.ytPromise;
 };
@@ -375,7 +423,9 @@ const waitForApiClientAndInitialize = () => {
         initJellyfinData(async () => {
           console.log("✅ Jellyfin API client initialized successfully");
           await initLocalization();
-          await loadYouTubeAPI();
+          if (CONFIG.enableTrailers) {
+            await loadYouTubeAPI();
+          }
           slidesInit();
         });
       } else {
@@ -1085,6 +1135,7 @@ const VisibilityObserver = {
       STATE.slideshow.players = {};
       container.querySelectorAll(".slide").forEach((slide) => slide.remove());
       STATE.slideshow.createdSlides = {};
+      PageBackdrop.clear();
     }
 
     this.wasVisible = isVisible;
@@ -1108,6 +1159,163 @@ const VisibilityObserver = {
     window.addEventListener("hashchange", this.updateVisibility.bind(this));
 
     this.updateVisibility();
+  },
+};
+
+/**
+ * Mirrors the featured slide into Jellyfin's own page backdrop layer, so the
+ * background behind the home page follows whatever the slideshow is showing
+ * instead of staying on unrelated library art.
+ *
+ * Reuses the exact backdrop URL the active slide already requested, so the
+ * browser serves it from cache and no extra image is fetched.
+ *
+ * Only active while the slideshow is visible. Leaving the home page restores
+ * Jellyfin's normal backdrop behaviour, so no other page is affected.
+ * Disable with CONFIG.syncPageBackdrop.
+ */
+const PageBackdrop = {
+  LAYER_CLASS: "slideshow-page-backdrop",
+  observer: null,
+  isWriting: false,
+  currentItemId: null,
+
+  /**
+   * Jellyfin creates .backdropContainer lazily, so it may not exist yet
+   * @returns {HTMLElement} The backdrop container
+   */
+  getOrCreateContainer() {
+    let container = document.querySelector(".backdropContainer");
+    if (!container) {
+      container = SlideUtils.createElement("div", {
+        className: "backdropContainer",
+      });
+      document.body.insertBefore(container, document.body.firstChild);
+    }
+    return container;
+  },
+
+  /**
+   * @param {HTMLElement} container - The backdrop container
+   * @returns {HTMLElement} Our own backdrop layer, created if needed
+   */
+  getOrCreateLayer(container) {
+    let layer = container.querySelector(`.${this.LAYER_CLASS}`);
+    if (!layer || !layer.isConnected) {
+      layer = SlideUtils.createElement("div", {
+        className: `backdropImage ${this.LAYER_CLASS}`,
+      });
+      container.appendChild(layer);
+    }
+    return layer;
+  },
+
+  /**
+   * Jellyfin runs its own backdrop rotator into the same container: it adds
+   * .backdropImage siblings and cycles them on a timer, which paints over
+   * whatever we set. While the slideshow owns the screen, keep our layer the
+   * only one and make sure it stays last.
+   * @param {HTMLElement} container - The backdrop container
+   */
+  evictForeignLayers(container) {
+    const layers = container.querySelectorAll(".backdropImage");
+    layers.forEach((layer) => {
+      if (!layer.classList.contains(this.LAYER_CLASS)) {
+        layer.remove();
+      }
+    });
+
+    const ours = container.querySelector(`.${this.LAYER_CLASS}`);
+    if (ours && ours !== container.lastElementChild) {
+      container.appendChild(ours);
+    }
+  },
+
+  /**
+   * Reacts to the rotator instead of polling for it
+   */
+  startObserver(container) {
+    if (this.observer) return;
+
+    this.observer = new MutationObserver(() => {
+      // Our own eviction mutates the container, which would re-enter here
+      if (this.isWriting) return;
+
+      this.isWriting = true;
+      try {
+        this.evictForeignLayers(container);
+      } finally {
+        this.isWriting = false;
+      }
+    });
+
+    this.observer.observe(container, { childList: true });
+  },
+
+  stopObserver() {
+    if (!this.observer) return;
+    this.observer.disconnect();
+    this.observer = null;
+  },
+
+  /**
+   * Points the page backdrop at the given item
+   * @param {string} itemId - Id of the item the slideshow is showing
+   */
+  update(itemId) {
+    if (!CONFIG.syncPageBackdrop) return;
+
+    const item = STATE.slideshow.loadedItems[itemId];
+    // Item data arrives with the slide. Until it does, leave the previous
+    // backdrop up rather than clearing it, so the page does not flash.
+    if (!item) return;
+
+    const src = SlideCreator.buildImageUrl(
+      item,
+      "Backdrop",
+      0,
+      STATE.jellyfinData.serverAddress,
+      60,
+    );
+    if (!src) return;
+
+    const container = this.getOrCreateContainer();
+
+    this.isWriting = true;
+    try {
+      const layer = this.getOrCreateLayer(container);
+
+      if (this.currentItemId !== itemId || layer.style.backgroundImage === "") {
+        layer.style.backgroundImage = `url("${src.replace(/"/g, "%22")}")`;
+        layer.classList.remove("backdropImageFadeIn");
+        // Force a reflow so the fade replays for the new image
+        void layer.offsetWidth;
+        layer.classList.add("backdropImageFadeIn");
+        this.currentItemId = itemId;
+      }
+
+      this.evictForeignLayers(container);
+    } finally {
+      this.isWriting = false;
+    }
+
+    document
+      .querySelector(".backgroundContainer")
+      ?.classList.add("withBackdrop");
+    this.startObserver(container);
+  },
+
+  /**
+   * Hands the backdrop back to Jellyfin
+   */
+  clear() {
+    this.stopObserver();
+    this.currentItemId = null;
+
+    document.querySelector(`.${this.LAYER_CLASS}`)?.remove();
+    document
+      .querySelector(".backgroundContainer")
+      ?.classList.remove("withBackdrop");
   },
 };
 
@@ -1165,6 +1373,73 @@ const SlideCreator = {
   },
 
   /**
+   * Picks the YouTube video id of the most appropriate trailer for an item.
+   *
+   * RemoteTrailers arrives in metadata provider order, which is not preference
+   * order. The first entry is frequently a promo clip, a teaser or an
+   * accessibility variant rather than the main trailer, and it is not
+   * guaranteed to be a YouTube link at all. Entries are ranked by name, with
+   * provider order breaking ties, and any entry that does not yield a video id
+   * is skipped instead of losing the trailer for that slide. Alternate cuts
+   * are demoted within their tier: they lose to an ordinary entry of the same
+   * tier but still beat lower tier promo clips.
+   *
+   * @param {Array} remoteTrailers - RemoteTrailers array from the item
+   * @returns {string|null} YouTube video id, or null if no entry is usable
+   */
+  selectTrailerVideoId(remoteTrailers) {
+    if (!Array.isArray(remoteTrailers) || remoteTrailers.length === 0) {
+      return null;
+    }
+
+    const rankName = (name) => {
+      const text = (name || "").toLowerCase();
+      const isAlternateCut = CONFIG.trailerAlternateCutTerms.some((term) =>
+        text.includes(term),
+      );
+
+      let rank;
+      if (text.includes("official trailer")) rank = 5;
+      else if (text.includes("final trailer") || text.includes("main trailer"))
+        rank = 4;
+      else if (text.includes("trailer")) rank = 3;
+      else if (text.includes("teaser")) rank = 2;
+      else rank = 1;
+
+      return isAlternateCut ? rank - 0.5 : rank;
+    };
+
+    let best = null;
+
+    for (const trailer of remoteTrailers) {
+      let videoId = null;
+      try {
+        const urlObj = new URL(trailer.Url);
+        const host = urlObj.hostname.replace(/^www\./, "");
+        if (host === "youtu.be") {
+          videoId = urlObj.pathname.split("/")[1] || null;
+        } else if (
+          (host === "youtube.com" || host === "m.youtube.com") &&
+          urlObj.pathname.startsWith("/embed/")
+        ) {
+          videoId = urlObj.pathname.split("/")[2] || null;
+        } else {
+          videoId = urlObj.searchParams.get("v");
+        }
+      } catch (e) {}
+
+      if (!videoId) continue;
+
+      const rank = rankName(trailer.Name);
+      if (!best || rank > best.rank) {
+        best = { videoId, rank };
+      }
+    }
+
+    return best ? best.videoId : null;
+  },
+
+  /**
    * Creates a slide element for an item
    * @param {Object} item - Item data
    * @param {string} title - Title type (Movie/TV Show)
@@ -1187,15 +1462,8 @@ const SlideCreator = {
     let videoId = null;
     let trailerContainer = null;
 
-    if (
-      CONFIG.enableTrailers &&
-      item.RemoteTrailers &&
-      item.RemoteTrailers.length > 0
-    ) {
-      try {
-        const urlObj = new URL(item.RemoteTrailers[0].Url);
-        videoId = urlObj.searchParams.get("v");
-      } catch (e) {}
+    if (CONFIG.enableTrailers) {
+      videoId = this.selectTrailerVideoId(item.RemoteTrailers);
 
       if (videoId) {
         trailerContainer = SlideUtils.createElement("div", {
@@ -1384,7 +1652,7 @@ const SlideCreator = {
         const milliseconds = runtime / 10000;
         const currentTime = new Date();
         const endTime = new Date(currentTime.getTime() + milliseconds);
-        const options = { hour: "2-digit", minute: "2-digit", hour12: false };
+        const options = { hour: "2-digit", minute: "2-digit" };
         const formattedEndTime = endTime.toLocaleTimeString([], options);
         const endsAtText = LocalizationUtils.getLocalizedString(
           "EndsAtValue",
@@ -1518,6 +1786,7 @@ const SlideCreator = {
         const startTime = await ApiUtils.getSkipSegments(videoId);
 
         loadYouTubeAPI().then((YT) => {
+          if (!YT) return;
           if (!document.getElementById(`trailer-${itemId}`)) return;
 
           STATE.slideshow.players[itemId] = new YT.Player(
@@ -1694,6 +1963,7 @@ const SlideshowManager = {
 
     STATE.slideshow.currentSlideIndex = index;
     this.updateDots();
+    PageBackdrop.update(currentItemId);
     this.preloadAdjacentSlides(index);
     this.pruneSlideCache();
 
@@ -2039,6 +2309,7 @@ const SlideshowManager = {
       }, CONFIG.shuffleInterval);
 
       STATE.slideshow.slideInterval.stop();
+      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
 
       await this.updateCurrentSlide(0);
 
@@ -2334,6 +2605,7 @@ window.slideshowPure = {
   SlideCreator,
   SlideshowManager,
   VisibilityObserver,
+  PageBackdrop,
   initSlideshowData: () => {
     SlideshowManager.loadSlideshowData();
   },

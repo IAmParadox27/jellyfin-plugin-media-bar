@@ -10,10 +10,31 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
     
     public class PluginConfiguration : BasePluginConfiguration
     {
+        public const string EmbeddedVersion = "embedded";
+
         public MediaBarState Enabled { get; set; } = MediaBarState.Enabled;
 
-        public string VersionString { get; set; } = "main";
-        
+        public string VersionString { get; set; } = EmbeddedVersion;
+
+        public bool AllowUnpinnedRefs { get; set; } = false;
+
+        public static bool UsesEmbeddedAssets(string? version, bool allowUnpinnedRefs)
+        {
+            version = version?.Trim();
+
+            if (string.IsNullOrWhiteSpace(version) ||
+                string.Equals(version, EmbeddedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // main/latest predate the embedded assets; configs that saved them meant
+            // "newest", which is the embedded copy unless the admin opts back in
+            return !allowUnpinnedRefs &&
+                   (string.Equals(version, "main", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase));
+        }
+
         public bool UseAvatarsFile { get; set; } = true;
 
         public string AvatarsPlaylist { get; set; } = string.Empty;

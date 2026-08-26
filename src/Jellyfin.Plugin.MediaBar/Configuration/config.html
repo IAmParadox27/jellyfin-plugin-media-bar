@@ -37,7 +37,18 @@
                         <label class="inputLabel inputLabelUnfocused" for="txtVersionString">Version</label>
                         <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtVersionString"></label>
                         <input id="txtVersionString" type="text" is="emby-input" class="emby-input" data-id="txtVersionString" />
-                        <div class="fieldDescription">Which version of the jsdelivr'd plugin should be used.</div>
+                        <div class="fieldDescription">Which version of the media bar to use. Leave as <code>embedded</code> (recommended): the version built into this plugin, tested to match it, works without internet access. Advanced: enter a release number (like <code>2.4.12.0</code>) to load that exact version from the internet instead.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkAllowUnpinnedRefs" is="emby-checkbox" class="emby-checkbox" data-id="chkAllowUnpinnedRefs" />
+                            <span class="checkboxLabel">Get updates early</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">With this on and Version set to <code>main</code> or <code>latest</code>, the media bar loads the developers' newest work-in-progress from the internet. Changes appear on their own within about half a day, before they have been released or fully tested. If something breaks, turn this off to go back to the built-in version.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -189,6 +200,7 @@
                     const config = {
                         Enabled: document.querySelector("[data-id=enabledSelect]").value,
                         UseAvatarsFile: document.querySelector("[data-id=chkUseAvatarsFile]").checked,
+                        AllowUnpinnedRefs: document.querySelector("[data-id=chkAllowUnpinnedRefs]").checked,
                         AvatarsPlaylist: document.querySelector("[data-id=txtAvatarsPlaylist]").value,
                         VersionString: document.querySelector("[data-id=txtVersionString]").value,
                         WebConfig: {
@@ -228,11 +240,8 @@
                         .then(function (config) {
                             document.querySelector("[data-id=enabledSelect]").value = config.Enabled;
                             document.querySelector("[data-id=chkUseAvatarsFile]").checked = config.UseAvatarsFile;
+                            document.querySelector("[data-id=chkAllowUnpinnedRefs]").checked = config.AllowUnpinnedRefs;
                             document.querySelector("[data-id=txtAvatarsPlaylist]").value = config.AvatarsPlaylist;
-                            
-                            if (config.VersionString === 'latest') {
-                                config.VersionString = 'main';
-                            }
                             
                             document.querySelector("[data-id=txtVersionString]").value = config.VersionString;
                             
