@@ -17,9 +17,16 @@ namespace Jellyfin.Plugin.MediaBar.Controllers
         [HttpGet("{file}")]
         public ActionResult GetFile([FromRoute] string file)
         {
-            Stream fileStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Jellyfin.Plugin.MediaBar.Inject." + file)!;
-            string fileContents = new StreamReader(fileStream).ReadToEnd();
-        
+            Stream? fileStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Jellyfin.Plugin.MediaBar.Inject." + file);
+
+            if (fileStream == null)
+            {
+                return NotFound();
+            }
+
+            using StreamReader streamReader = new StreamReader(fileStream);
+            string fileContents = streamReader.ReadToEnd();
+
             string contentType = "text/plain";
 
             if (Path.GetExtension(file) == ".js")

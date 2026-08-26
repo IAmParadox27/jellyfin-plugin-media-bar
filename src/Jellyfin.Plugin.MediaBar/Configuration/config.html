@@ -37,7 +37,7 @@
                         <label class="inputLabel inputLabelUnfocused" for="txtVersionString">Version</label>
                         <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtVersionString"></label>
                         <input id="txtVersionString" type="text" is="emby-input" class="emby-input" data-id="txtVersionString" />
-                        <div class="fieldDescription">Which version of the jsdelivr'd plugin should be used.</div>
+                        <div class="fieldDescription">Where the web assets are loaded from. <code>embedded</code> (also <code>main</code>, <code>latest</code>, or blank) serves the copies shipped inside this plugin, which always match the installed version and need no internet access. Set a tag or commit to load that exact version from jsDelivr instead.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -229,10 +229,6 @@
                             document.querySelector("[data-id=enabledSelect]").value = config.Enabled;
                             document.querySelector("[data-id=chkUseAvatarsFile]").checked = config.UseAvatarsFile;
                             document.querySelector("[data-id=txtAvatarsPlaylist]").value = config.AvatarsPlaylist;
-                            
-                            if (config.VersionString === 'latest') {
-                                config.VersionString = 'main';
-                            }
                             
                             document.querySelector("[data-id=txtVersionString]").value = config.VersionString;
                             
