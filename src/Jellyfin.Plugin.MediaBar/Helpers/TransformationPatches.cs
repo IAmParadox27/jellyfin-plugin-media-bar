@@ -96,25 +96,31 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{typeof(MediaBarPlugin).Namespace}.Inject.index.html")!;
             using TextReader reader = new StreamReader(stream);
 
-            if (MediaBarPlugin.Instance.Configuration.VersionString == "latest")
-            {
-                MediaBarPlugin.Instance.Configuration.VersionString = "main";
-            }
-
-            if (MediaBarPlugin.Instance.Configuration.VersionString == "main" &&
-                JellyfinVersionAttribute.GetVersion() == "10.11")
-            {
-                // Force 10.11 branch instead of main for now
-                MediaBarPlugin.Instance.Configuration.VersionString = "10.11";
-            }
-            
             string importedHtml = reader
                 .ReadToEnd()
-                .Replace("{{Config.VersionString}}", MediaBarPlugin.Instance.Configuration.VersionString);
-            
+                .Replace("{{Config.VersionString}}", ResolveVersion());
+
             string regex = Regex.Replace(payload.Contents!, "(</head>)", $"{importedHtml}$1");
-            
+
             return regex;
+        }
+
+        private static string ResolveVersion()
+        {
+            string version = MediaBarPlugin.Instance.Configuration.VersionString;
+
+            if (version == "latest")
+            {
+                version = "main";
+            }
+
+            if (version == "main" && JellyfinVersionAttribute.GetVersion() == "10.11")
+            {
+                // Force 10.11 branch instead of main for now
+                version = "10.11";
+            }
+
+            return version;
         }
 
         public static string HomeHtmlChunk(PatchRequestPayload payload)
