@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using Jellyfin.Extensions;
-using Jellyfin.Plugin.MediaBar.Attributes;
 using Jellyfin.Plugin.MediaBar.Configuration;
 using Jellyfin.Plugin.MediaBar.JellyfinVersionSpecific;
 using Jellyfin.Plugin.MediaBar.Model;
@@ -107,24 +106,12 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
 
         private static string ResolveAssetBaseUrl()
         {
-            string version = MediaBarPlugin.Instance.Configuration.VersionString;
+            string version = MediaBarPlugin.Instance.Configuration.VersionString.Trim();
 
-            if (string.IsNullOrWhiteSpace(version) ||
-                string.Equals(version, PluginConfiguration.EmbeddedVersion, StringComparison.OrdinalIgnoreCase))
+            if (PluginConfiguration.UsesEmbeddedAssets(version))
             {
                 // Relative to /web/ so it resolves when Jellyfin is hosted under a base path
                 return "../MediaBar";
-            }
-
-            if (version == "latest")
-            {
-                version = "main";
-            }
-
-            if (version == "main" && JellyfinVersionAttribute.GetVersion() == "10.11")
-            {
-                // Force 10.11 branch instead of main for now
-                version = "10.11";
             }
 
             return $"https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{version}";
