@@ -10,10 +10,12 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
     
     public class PluginConfiguration : BasePluginConfiguration
     {
+        public const string EmbeddedVersion = "embedded";
+
         public MediaBarState Enabled { get; set; } = MediaBarState.Enabled;
 
-        public string VersionString { get; set; } = "main";
-        
+        public string VersionString { get; set; } = EmbeddedVersion;
+
         public bool UseAvatarsFile { get; set; } = true;
 
         public string AvatarsPlaylist { get; set; } = string.Empty;

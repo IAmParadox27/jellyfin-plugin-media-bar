@@ -98,16 +98,23 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
 
             string importedHtml = reader
                 .ReadToEnd()
-                .Replace("{{Config.VersionString}}", ResolveVersion());
+                .Replace("{{AssetBaseUrl}}", ResolveAssetBaseUrl());
 
             string regex = Regex.Replace(payload.Contents!, "(</head>)", $"{importedHtml}$1");
 
             return regex;
         }
 
-        private static string ResolveVersion()
+        private static string ResolveAssetBaseUrl()
         {
             string version = MediaBarPlugin.Instance.Configuration.VersionString;
+
+            if (string.IsNullOrWhiteSpace(version) ||
+                string.Equals(version, PluginConfiguration.EmbeddedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                // Relative to /web/ so it resolves when Jellyfin is hosted under a base path
+                return "../MediaBar";
+            }
 
             if (version == "latest")
             {
@@ -120,7 +127,7 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
                 version = "10.11";
             }
 
-            return version;
+            return $"https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{version}";
         }
 
         public static string HomeHtmlChunk(PatchRequestPayload payload)
