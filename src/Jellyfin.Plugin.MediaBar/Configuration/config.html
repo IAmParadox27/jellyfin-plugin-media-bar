@@ -37,7 +37,18 @@
                         <label class="inputLabel inputLabelUnfocused" for="txtVersionString">Version</label>
                         <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtVersionString"></label>
                         <input id="txtVersionString" type="text" is="emby-input" class="emby-input" data-id="txtVersionString" />
-                        <div class="fieldDescription">Where the web assets are loaded from. <code>embedded</code> (also <code>main</code>, <code>latest</code>, or blank) serves the copies shipped inside this plugin, which always match the installed version and need no internet access. Set a tag or commit to load that exact version from jsDelivr instead.</div>
+                        <div class="fieldDescription">Where the web assets are loaded from. <code>embedded</code> (or blank) serves the copies shipped inside this plugin, which always match the installed version and need no internet access. Set a tag or commit to load that exact version from jsDelivr instead. <code>main</code> and <code>latest</code> also mean embedded, unless "Allow unpinned refs" below is enabled.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkAllowUnpinnedRefs" is="emby-checkbox" class="emby-checkbox" data-id="chkAllowUnpinnedRefs" />
+                            <span class="checkboxLabel">Allow unpinned refs</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">If checked, a Version of <code>main</code> or <code>latest</code> loads the newest unreleased code live from jsDelivr instead of the embedded copies. Updates arrive within about 12 hours of a push, unversioned and without a release.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -189,6 +200,7 @@
                     const config = {
                         Enabled: document.querySelector("[data-id=enabledSelect]").value,
                         UseAvatarsFile: document.querySelector("[data-id=chkUseAvatarsFile]").checked,
+                        AllowUnpinnedRefs: document.querySelector("[data-id=chkAllowUnpinnedRefs]").checked,
                         AvatarsPlaylist: document.querySelector("[data-id=txtAvatarsPlaylist]").value,
                         VersionString: document.querySelector("[data-id=txtVersionString]").value,
                         WebConfig: {
@@ -228,6 +240,7 @@
                         .then(function (config) {
                             document.querySelector("[data-id=enabledSelect]").value = config.Enabled;
                             document.querySelector("[data-id=chkUseAvatarsFile]").checked = config.UseAvatarsFile;
+                            document.querySelector("[data-id=chkAllowUnpinnedRefs]").checked = config.AllowUnpinnedRefs;
                             document.querySelector("[data-id=txtAvatarsPlaylist]").value = config.AvatarsPlaylist;
                             
                             document.querySelector("[data-id=txtVersionString]").value = config.VersionString;

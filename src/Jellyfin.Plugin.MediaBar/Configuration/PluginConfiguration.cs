@@ -16,16 +16,23 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
 
         public string VersionString { get; set; } = EmbeddedVersion;
 
-        public static bool UsesEmbeddedAssets(string? version)
+        public bool AllowUnpinnedRefs { get; set; } = false;
+
+        public static bool UsesEmbeddedAssets(string? version, bool allowUnpinnedRefs)
         {
             version = version?.Trim();
 
+            if (string.IsNullOrWhiteSpace(version) ||
+                string.Equals(version, EmbeddedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             // main/latest predate the embedded assets; configs that saved them meant
-            // "newest", which is now the embedded copy
-            return string.IsNullOrWhiteSpace(version) ||
-                   string.Equals(version, EmbeddedVersion, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(version, "main", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase);
+            // "newest", which is the embedded copy unless the admin opts back in
+            return !allowUnpinnedRefs &&
+                   (string.Equals(version, "main", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase));
         }
 
         public bool UseAvatarsFile { get; set; } = true;
