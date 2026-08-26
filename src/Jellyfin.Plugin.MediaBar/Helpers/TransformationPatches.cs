@@ -106,12 +106,19 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
 
         private static string ResolveAssetBaseUrl()
         {
-            string version = MediaBarPlugin.Instance.Configuration.VersionString.Trim();
+            PluginConfiguration config = MediaBarPlugin.Instance.Configuration;
+            string version = config.VersionString.Trim();
 
-            if (PluginConfiguration.UsesEmbeddedAssets(version))
+            if (PluginConfiguration.UsesEmbeddedAssets(version, config.AllowUnpinnedRefs))
             {
                 // Relative to /web/ so it resolves when Jellyfin is hosted under a base path
                 return "../MediaBar";
+            }
+
+            if (string.Equals(version, "latest", StringComparison.OrdinalIgnoreCase))
+            {
+                // "latest" is not a git ref; it has always meant the main branch
+                version = "main";
             }
 
             return $"https://cdn.jsdelivr.net/gh/IAmParadox27/jellyfin-plugin-media-bar@{version}";
