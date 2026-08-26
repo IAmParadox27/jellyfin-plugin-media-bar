@@ -37,18 +37,18 @@
                         <label class="inputLabel inputLabelUnfocused" for="txtVersionString">Version</label>
                         <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtVersionString"></label>
                         <input id="txtVersionString" type="text" is="emby-input" class="emby-input" data-id="txtVersionString" />
-                        <div class="fieldDescription">Where the web assets are loaded from. <code>embedded</code> (or blank) serves the copies shipped inside this plugin, which always match the installed version and need no internet access. Set a tag or commit to load that exact version from jsDelivr instead. <code>main</code> and <code>latest</code> also mean embedded, unless "Allow unpinned refs" below is enabled.</div>
+                        <div class="fieldDescription">Which version of the media bar to use. Leave as <code>embedded</code> (recommended): the version built into this plugin, tested to match it, works without internet access. Advanced: enter a release number (like <code>2.4.12.0</code>) to load that exact version from the internet instead.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
                             <input type="checkbox" id="chkAllowUnpinnedRefs" is="emby-checkbox" class="emby-checkbox" data-id="chkAllowUnpinnedRefs" />
-                            <span class="checkboxLabel">Allow unpinned refs</span>
+                            <span class="checkboxLabel">Get updates early</span>
                             <span class="checkboxOutline">
                                 <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
                                 <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
                             </span>
                         </label>
-                        <div class="fieldDescription">If checked, a Version of <code>main</code> or <code>latest</code> loads the newest unreleased code live from jsDelivr instead of the embedded copies. Updates arrive within about 12 hours of a push, unversioned and without a release.</div>
+                        <div class="fieldDescription">With this on and Version set to <code>main</code> or <code>latest</code>, the media bar loads the developers' newest work-in-progress from the internet. Changes appear on their own within about half a day, before they have been released or fully tested. If something breaks, turn this off to go back to the built-in version.</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
