@@ -68,7 +68,7 @@
     </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar')">
-        <Exec Condition="$(JellyfinVersion.StartsWith('12.0'))"  Command="xcopy $(OutDir) &quot;C:\ProgramData\Jellyfin\Server_12\plugins\MediaBar&quot; /y" />
+        <Exec Condition="$(JellyfinVersion.StartsWith('12.0'))"  Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_12\plugins\MediaBar&quot; /y" />
         <Exec Condition="$(JellyfinVersion.StartsWith('10.11'))" Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar&quot; /y" />
         <Exec Condition="'$(JellyfinVersion)' == '10.10.7'"      Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_10_7\plugins\MediaBar&quot; /y" />
     </Target>
