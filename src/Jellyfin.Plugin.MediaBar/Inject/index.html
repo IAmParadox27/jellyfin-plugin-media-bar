@@ -54,6 +54,11 @@
                 if (config.EnableTrailers !== undefined && config.EnableTrailers !== null) {
                     window.slideshowPure.CONFIG.enableTrailers = config.EnableTrailers;
                 }
+                if (config.SyncPageBackdrop !== undefined && config.SyncPageBackdrop !== null) {
+                    window.slideshowPure.CONFIG.syncPageBackdrop = config.SyncPageBackdrop;
+                } else {
+                    window.slideshowPure.CONFIG.syncPageBackdrop = false; // Default off
+                }
                 window.slideshowPure.CONFIG.slideAnimationEnabled = config.SlideAnimationEnabled;
             }
         };

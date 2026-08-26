@@ -154,6 +154,17 @@
                         </label>
                         <div class="fieldDescription">Enable trailer playback on the media bar slides?</div>
                     </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 1.5em;">
+                        <label class="emby-checkbox-label">
+                            <input data-id="chkSyncPageBackdrop" id="chkSyncPageBackdrop" type="checkbox" is="emby-checkbox" class="emby-checkbox">
+                            <span class="checkboxLabel">Sync Page Backdrop?</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Sync the page backdrop with the media bar slide?</div>
+                    </div>
                 </div>
             </div>
             <br />
@@ -222,6 +233,7 @@
                             FadeTransitionDuration: parseInt(document.querySelector("[data-id=numFadeTransitionDuration]").value, 10),
                             SlideAnimationEnabled: document.querySelector("[data-id=chkSlideAnimationEnabled]").checked,
                             EnableTrailers: document.querySelector("[data-id=chkEnableTrailers]").checked,
+                            SyncPageBackdrop: document.querySelector("[data-id=chkSyncPageBackdrop]").checked,
                         }
                     };
 
