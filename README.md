@@ -1,3 +1,6 @@
+> [!IMPORTANT]  
+> I am aware Jellyfin 12 has been released. I have a version of the plugin ready to go, I am waiting for the go ahead from @MakD to ensure the visual side of things is ready as well. As soon as I can I'll release. Please don't open tickets about it not being available for JF 12 in the mean time.
+
 <h1 align="center">Media Bar</h1>
 <h2 align="center">A Jellyfin Plugin</h2>
 <p align="center">
