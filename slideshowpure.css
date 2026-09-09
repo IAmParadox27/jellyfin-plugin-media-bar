@@ -899,3 +899,35 @@
     top: calc(50% + 15vh);
   }
 }
+
+/* Jellyfin 12 uses a viewport-sized app shell even when the legacy Desktop
+   layout is selected. Keep the original MediaBar in the viewport without
+   enabling the modern v12 visual treatment. */
+.jellyfin-v12-shell #slides-container {
+  position: absolute;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  z-index: 1;
+}
+
+.jellyfin-v12-shell .homeSectionsContainer {
+  top: clamp(31rem, calc(50vh + 12rem), 44rem);
+  z-index: 6;
+}
+
+.jellyfin-v12-shell #slides-container .logo-container,
+.jellyfin-v12-shell #slides-container .info-container,
+.jellyfin-v12-shell #slides-container .genre,
+.jellyfin-v12-shell #slides-container .plot-container,
+.jellyfin-v12-shell #slides-container .button-container,
+.jellyfin-v12-shell #slides-container .dots-container,
+.jellyfin-v12-shell #slides-container .arrow,
+.jellyfin-v12-shell #slides-container .volume-toggle,
+.jellyfin-v12-shell #slides-container .pause-button {
+  z-index: 8;
+}

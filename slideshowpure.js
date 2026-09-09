@@ -18,7 +18,7 @@ const CONFIG = {
   maxMovies: 15,
   maxTvShows: 15,
   maxItems: 50,
-  preloadCount: 1,
+  preloadCount: 2,
   fadeTransitionDuration: 500,
   slideAnimationEnabled: true,
   enableTrailers: true,
@@ -38,6 +38,26 @@ const CONFIG = {
   ],
   syncPageBackdrop: true,
   youtubeApiLoadTimeoutMs: 8000,
+  enableSponsorBlock: true,
+  sponsorBlockTimeoutMs: 5000,
+  sponsorBlockFailureCooldownMs: 300000,
+  layoutMode: "auto",
+  imageSizing: {
+    backdropMaxWidth: 2560,
+    logoMaxWidth: 1400,
+  },
+  artworkLoadTimeoutMs: 12000,
+  initialArtworkLoadTimeoutMs: 2500,
+  trailerPlayerReadyTimeoutMs: 8000,
+  trailerStartupTimeoutMs: 15000,
+  trailerPlaybackMinMs: 4000,
+  trailerPlaybackMaxMs: 180000,
+  trailerEndGraceMs: 2500,
+  trailerIdleAdvanceMs: 7000,
+  itemList: {
+    path: "/web/avatars/list.txt",
+    maxItems: 30,
+  },
 };
 
 // State management
@@ -66,6 +86,10 @@ const STATE = {
     isLoading: false,
     players: {},
     ytPromise: null,
+    skipSegmentCache: {},
+    sponsorBlockDisabledUntil: 0,
+    trailerStartTimes: {},
+    trailerWatchdogs: {},
     isMuted: true,
     isVideoPlaying: false,
   },
@@ -241,7 +265,6 @@ const initLoadingScreen = () => {
     currentPath.includes("/web/#/home.html") ||
     currentPath.includes("/web/#/home") ||
     currentPath.includes("/web/index.html#/home.html") ||
-    currentPath.endsWith("/web/index.html#/home") ||
     currentPath.endsWith("/web/");
 
   if (!isHomePage) return;
@@ -347,6 +370,8 @@ const resetSlideshowState = () => {
     STATE.slideshow.slideInterval.stop();
   }
 
+  Object.values(STATE.slideshow.trailerWatchdogs || {}).forEach(clearTimeout);
+
   const container = document.getElementById("slides-container");
   if (container) {
     while (container.firstChild) {
@@ -366,6 +391,9 @@ const resetSlideshowState = () => {
   STATE.slideshow.createdSlides = {};
   STATE.slideshow.totalItems = 0;
   STATE.slideshow.isLoading = false;
+  STATE.slideshow.trailerStartTimes = {};
+  STATE.slideshow.trailerWatchdogs = {};
+  STATE.slideshow.isVideoPlaying = false;
 };
 
 /**
@@ -440,6 +468,398 @@ const waitForApiClientAndInitialize = () => {
 };
 
 waitForApiClientAndInitialize();
+
+/**
+ * Jellyfin 12 can render either the legacy Desktop shell or the newer
+ * React/MUI shell. Keep the original MediaBar layout for legacy Desktop mode
+ * and only enable the v12 support layer when the modern shell is present.
+ */
+const LayoutUtils = {
+  V12_SHELL_CLASS: "jellyfin-v12-shell",
+  V12_LAYOUT_CLASS: "jellyfin-v12-layout",
+  FORCE_LEGACY_MODES: new Set(["legacy", "desktop", "classic"]),
+  FORCE_MODERN_MODES: new Set(["modern", "mui", "v12"]),
+
+  configuredLayoutMode() {
+    return String(CONFIG.layoutMode || "auto").trim().toLowerCase();
+  },
+
+  isJellyfinV12Shell() {
+    const reactRoot = document.getElementById("reactRoot");
+    if (!reactRoot) return false;
+
+    const rootRect = reactRoot.getBoundingClientRect();
+    return rootRect.height >= Math.min(window.innerHeight * 0.5, 320);
+  },
+
+  isJellyfinV12Layout() {
+    const configuredMode = this.configuredLayoutMode();
+    if (this.FORCE_LEGACY_MODES.has(configuredMode)) return false;
+    if (this.FORCE_MODERN_MODES.has(configuredMode)) return true;
+
+    return Boolean(
+      document.querySelector(
+        [
+          "header.MuiAppBar-root",
+          ".MuiAppBar-root",
+          "main.MuiBox-root",
+          "[class*='MuiAppBar-root']",
+          "[class*='MuiBottomNavigation-root']",
+        ].join(", "),
+      ),
+    );
+  },
+
+  isPortraitPhone() {
+    return window.matchMedia(
+      "only screen and (max-width: 767px) and (orientation: portrait)",
+    ).matches;
+  },
+
+  syncLayoutClass(container) {
+    const isV12Shell = this.isJellyfinV12Shell();
+    const isV12Layout = this.isJellyfinV12Layout();
+
+    [document.documentElement, document.body].forEach((element) => {
+      if (element) {
+        element.classList.toggle(this.V12_SHELL_CLASS, isV12Shell);
+        element.classList.toggle(this.V12_LAYOUT_CLASS, isV12Layout);
+      }
+    });
+
+    if (container) {
+      container.dataset.jellyfinShell = isV12Shell ? "v12" : "legacy";
+      container.dataset.jellyfinLayout = isV12Layout ? "v12" : "legacy";
+    }
+
+    return isV12Layout;
+  },
+
+  mountSlidesContainer(container) {
+    this.syncLayoutClass(container);
+
+    if (container.parentElement !== document.body) {
+      document.body.appendChild(container);
+    }
+
+    return container;
+  },
+};
+
+const HashUtils = {
+  async sha256Hex(value) {
+    if (window.crypto?.subtle && window.TextEncoder) {
+      const data = new TextEncoder().encode(value);
+      const hash = await window.crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    return this.sha256HexFallback(value);
+  },
+
+  sha256HexFallback(value) {
+    const ascii = unescape(encodeURIComponent(value));
+    const mathPow = Math.pow;
+    const maxWord = mathPow(2, 32);
+    const rightRotate = (word, amount) =>
+      (word >>> amount) | (word << (32 - amount));
+    const words = [];
+    const asciiBitLength = ascii.length * 8;
+    let result = "";
+    let hash = [];
+    const k = [];
+    const isComposite = {};
+    let primeCounter = 0;
+
+    for (let candidate = 2; primeCounter < 64; candidate += 1) {
+      if (!isComposite[candidate]) {
+        for (let i = 0; i < 313; i += candidate) {
+          isComposite[i] = candidate;
+        }
+        hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+        k[primeCounter] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+        primeCounter += 1;
+      }
+    }
+
+    let message = `${ascii}\x80`;
+    while (message.length % 64 - 56) {
+      message += "\x00";
+    }
+
+    for (let i = 0; i < message.length; i += 1) {
+      words[i >> 2] |= message.charCodeAt(i) << (((3 - i) % 4) * 8);
+    }
+    words[words.length] = (asciiBitLength / maxWord) | 0;
+    words[words.length] = asciiBitLength;
+
+    for (let j = 0; j < words.length; ) {
+      const w = words.slice(j, (j += 16));
+      const oldHash = hash;
+      hash = hash.slice(0, 8);
+
+      for (let i = 0; i < 64; i += 1) {
+        const w15 = w[i - 15];
+        const w2 = w[i - 2];
+        const a = hash[0];
+        const e = hash[4];
+        const temp1 =
+          hash[7] +
+          (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) +
+          ((e & hash[5]) ^ (~e & hash[6])) +
+          k[i] +
+          (w[i] =
+            i < 16
+              ? w[i]
+              : (w[i - 16] +
+                  (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +
+                  w[i - 7] +
+                  (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) |
+                0);
+        const temp2 =
+          (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +
+          ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+
+        hash = [(temp1 + temp2) | 0].concat(hash);
+        hash[4] = (hash[4] + temp1) | 0;
+      }
+
+      for (let i = 0; i < 8; i += 1) {
+        hash[i] = (hash[i] + oldHash[i]) | 0;
+      }
+    }
+
+    for (let i = 0; i < 8; i += 1) {
+      for (let j = 3; j + 1; j -= 1) {
+        const byte = (hash[i] >> (j * 8)) & 255;
+        result += (byte < 16 ? "0" : "") + byte.toString(16);
+      }
+    }
+
+    return result;
+  },
+};
+
+const PlayerUtils = {
+  getIframe(player) {
+    try {
+      if (player && typeof player.getIframe === "function") {
+        return player.getIframe();
+      }
+    } catch (error) {}
+    return null;
+  },
+
+  isPlayable(player) {
+    const iframe = this.getIframe(player);
+    if (!iframe || !iframe.isConnected || !iframe.contentWindow) return false;
+
+    try {
+      const src = iframe.getAttribute("src") || iframe.src || "";
+      return /https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\//.test(src);
+    } catch (error) {
+      return false;
+    }
+  },
+
+  call(player, method, ...args) {
+    if (!player || typeof player[method] !== "function") return false;
+    if (method !== "destroy" && !this.isPlayable(player)) return false;
+
+    try {
+      player[method](...args);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  getNumber(player, method, allowZero = true) {
+    if (!player || typeof player[method] !== "function") return null;
+    if (!this.isPlayable(player)) return null;
+
+    try {
+      const value = Number(player[method]());
+      if (!Number.isFinite(value)) return null;
+      if (allowZero ? value < 0 : value <= 0) return null;
+      return value;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  destroy(player) {
+    if (!player || typeof player.destroy !== "function") return false;
+
+    try {
+      player.destroy();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  applyMuteState(player) {
+    if (!this.isPlayable(player)) return false;
+
+    if (STATE.slideshow.isMuted) {
+      return this.call(player, "mute");
+    }
+
+    const unmuted = this.call(player, "unMute");
+    this.call(player, "setVolume", 50);
+    return unmuted;
+  },
+
+  waitForPlayable(itemId, timeoutMs = CONFIG.trailerPlayerReadyTimeoutMs) {
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+
+      const checkPlayer = () => {
+        const player = STATE.slideshow.players[itemId];
+        if (
+          player &&
+          typeof player.playVideo === "function" &&
+          this.isPlayable(player)
+        ) {
+          resolve(player);
+          return;
+        }
+
+        if (Date.now() - startedAt >= timeoutMs) {
+          resolve(null);
+          return;
+        }
+
+        setTimeout(checkPlayer, 100);
+      };
+
+      checkPlayer();
+    });
+  },
+};
+
+const TrailerUtils = {
+  getTrailerUrl(trailer) {
+    if (!trailer) return "";
+    return typeof trailer === "string" ? trailer : trailer.Url || trailer.url || "";
+  },
+
+  getTrailerName(trailer) {
+    if (!trailer || typeof trailer === "string") return "";
+    return trailer.Name || trailer.name || "";
+  },
+
+  normalizeText(value) {
+    return `${value || ""}`.toLowerCase().replace(/[’‘]/g, "'");
+  },
+
+  sanitizeVideoId(videoId) {
+    const match = `${videoId || ""}`.match(/^[a-zA-Z0-9_-]{11}$/);
+    return match ? match[0] : null;
+  },
+
+  parseYouTubeVideoId(trailer) {
+    const rawUrl = this.getTrailerUrl(trailer);
+    if (!rawUrl) return null;
+
+    try {
+      const baseUrl =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : "https://www.youtube.com";
+      const url = new URL(rawUrl, baseUrl);
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      const segments = url.pathname.split("/").filter(Boolean);
+
+      if (host === "youtu.be") {
+        return this.sanitizeVideoId(segments[0]);
+      }
+
+      if (
+        host === "youtube.com" ||
+        host === "m.youtube.com" ||
+        host === "music.youtube.com" ||
+        host === "youtube-nocookie.com"
+      ) {
+        if (segments[0] === "shorts") return null;
+        if (["embed", "v", "live"].includes(segments[0])) {
+          return this.sanitizeVideoId(segments[1]);
+        }
+        return this.sanitizeVideoId(url.searchParams.get("v"));
+      }
+    } catch (error) {}
+
+    const fallbackMatch = rawUrl.match(
+      /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?.*?[?&]?v=|embed\/|v\/|live\/))([a-zA-Z0-9_-]{11})/,
+    );
+    return fallbackMatch ? fallbackMatch[1] : null;
+  },
+
+  scoreTrailer(trailer, index) {
+    const videoId = this.parseYouTubeVideoId(trailer);
+    if (!videoId) return null;
+
+    const name = this.getTrailerName(trailer);
+    const url = this.getTrailerUrl(trailer);
+    const text = this.normalizeText(`${name} ${url}`);
+
+    // These are almost always portrait/mobile-first promos, not cinematic trailers.
+    if (/\b(vertical|portrait)\b/.test(text) || /\/shorts\//i.test(url)) {
+      return null;
+    }
+
+    let score = 100 - index * 0.5;
+
+    if (/\bofficial\b/.test(text)) score += 45;
+    if (/\bofficial\s+(?:movie\s+)?trailer\b/.test(text)) score += 120;
+    else if (/\btrailer\b/.test(text)) score += 80;
+    if (/\bteaser\b/.test(text)) score += 45;
+
+    if (/\b(clip|scene|promo|featurette|behind the scenes|tv spot)\b/.test(text)) {
+      score -= 55;
+    }
+    if (/\b(now playing|watch now|watch today|at home|on digital|rent|own)\b/.test(text)) {
+      score -= 35;
+    }
+    if (/\b(tomorrow|tickets?|in theaters? tomorrow|opening)\b/.test(text)) {
+      score -= 30;
+    }
+    if (/\btop\s+\d+\b|\bthings?\s+(?:not\s+)?to\s+do\b/.test(text)) {
+      score -= 70;
+    }
+    if (/#shorts?\b|\btiktok\b|\breel\b/.test(text)) {
+      score -= 100;
+    }
+    if (!/\b(trailer|teaser)\b/.test(text)) {
+      score -= 20;
+    }
+    // Alternate cuts (accessibility variants, social crops) lose to an
+    // ordinary entry of the same tier but still beat lower tier promo clips.
+    if (CONFIG.trailerAlternateCutTerms.some((term) => text.includes(term))) {
+      score -= 25;
+    }
+
+    return { videoId, trailer, score, index };
+  },
+
+  pickBestTrailer(remoteTrailers) {
+    if (!Array.isArray(remoteTrailers) || remoteTrailers.length === 0) {
+      return null;
+    }
+
+    const candidates = remoteTrailers
+      .map((trailer, index) => this.scoreTrailer(trailer, index))
+      .filter(Boolean);
+
+    if (candidates.length === 0) return null;
+
+    candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+    return candidates[0];
+  },
+};
 
 /**
  * Utility functions for slide creation and management
@@ -528,9 +948,8 @@ const SlideUtils = {
     let container = document.getElementById("slides-container");
     if (!container) {
       container = this.createElement("div", { id: "slides-container" });
-      document.body.appendChild(container);
     }
-    return container;
+    return LayoutUtils.mountSlidesContainer(container);
   },
 
   /**
@@ -722,47 +1141,23 @@ const LocalizationUtils = {
          */
         const chunkText = await response.text();
 
-        const replaceEscaped = (text) =>
-          text
-            .replace(/\\"/g, '"')
-            .replace(/\\n/g, "\n")
-            .replace(/\\\\/g, "\\")
-            .replace(/\\'/g, "'");
-        try {
-          const START = /^(.*)JSON\.parse\(['"]/gms;
-          const END = /['"]?\)?\s*}?(\r\n|\r|\n)?}?]?\)?;(\r\n|\r|\n)?$/gms;
-
-          const jsonString = replaceEscaped(
-            chunkText.replace(START, "").replace(END, ""),
-          );
-          this.translations[locale] = JSON.parse(jsonString);
-          return;
-        } catch (e) {
-          console.error("Failed to parse JSON from standard extraction.");
+        // The chunk wraps the catalogue in JSON.parse('<js string literal>').
+        // Decode that literal in a single pass: sequential replaces corrupt
+        // catalogues whose values contain both backslashes and quotes (fr, it...).
+        const literal = chunkText.match(/JSON\.parse\((['"])([\s\S]*?)\1\)/);
+        if (!literal) {
+          throw new Error("Translation chunk has no JSON.parse() payload");
         }
-
-        let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
-        if (jsonMatch) {
-          try {
-            const jsonString = replaceEscaped(jsonMatch[1]);
-            this.translations[locale] = JSON.parse(jsonString);
-            return;
-          } catch (e) {
-            console.error("Failed to parse JSON from direct extraction.");
-          }
-        }
-
-        const jsonStart = chunkText.indexOf("{");
-        const jsonEnd = chunkText.lastIndexOf("}") + 1;
-        if (jsonStart !== -1 && jsonEnd > jsonStart) {
-          const jsonString = chunkText.substring(jsonStart, jsonEnd);
-          try {
-            this.translations[locale] = JSON.parse(jsonString);
-            return;
-          } catch (e) {
-            console.error("Failed to parse JSON from chunk:", e);
-          }
-        }
+        const jsonString = literal[2].replace(
+          /\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g,
+          (_, esc) => {
+            if (esc[0] === "u" || esc[0] === "x") {
+              return String.fromCharCode(parseInt(esc.slice(1), 16));
+            }
+            return { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", 0: "\0" }[esc] ?? esc;
+          },
+        );
+        this.translations[locale] = JSON.parse(jsonString);
       } catch (error) {
         console.error("Error loading translations:", error);
       } finally {
@@ -843,27 +1238,93 @@ const ApiUtils = {
    */
 
   async getSkipSegments(videoId) {
+    if (!videoId) return 0;
+    if (
+      Object.prototype.hasOwnProperty.call(
+        STATE.slideshow.skipSegmentCache,
+        videoId,
+      )
+    ) {
+      return STATE.slideshow.skipSegmentCache[videoId];
+    }
+
+    if (!CONFIG.enableSponsorBlock) {
+      STATE.slideshow.skipSegmentCache[videoId] = 0;
+      return 0;
+    }
+
+    if (Date.now() < STATE.slideshow.sponsorBlockDisabledUntil) {
+      return 0;
+    }
+
+    let timeoutId = null;
     try {
       const categories = '["intro","sponsor","selfpromo","interaction"]';
+      const hashPrefix = (await HashUtils.sha256Hex(videoId)).slice(0, 4);
+      const controller =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
+      if (controller) {
+        timeoutId = setTimeout(
+          () => controller.abort(),
+          CONFIG.sponsorBlockTimeoutMs,
+        );
+      }
+
       const response = await fetch(
-        `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`,
+        `https://sponsor.ajay.app/api/skipSegments/${hashPrefix}?categories=${encodeURIComponent(
+          categories,
+        )}`,
+        {
+          headers: {
+            "x-client-name": "Jellyfin-Media-Bar",
+          },
+          signal: controller?.signal,
+        },
       );
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (response.status === 200) {
-        const segments = await response.json();
+        const bucket = await response.json();
+        const videoSegments = Array.isArray(bucket)
+          ? bucket.find((entry) => entry.videoID === videoId)?.segments || []
+          : [];
+        const segments = Array.isArray(videoSegments) ? videoSegments : [];
         const introSegment = segments.find((s) => s.segment[0] < 5);
 
         if (introSegment) {
           console.log(
             `[SponsorBlock] Skipping intro for ${videoId}. Start at: ${introSegment.segment[1]}`,
           );
-          return Math.ceil(introSegment.segment[1]);
+          STATE.slideshow.skipSegmentCache[videoId] = Math.ceil(
+            introSegment.segment[1],
+          );
+          return STATE.slideshow.skipSegmentCache[videoId];
         }
       }
+      if (response.status >= 500) {
+        STATE.slideshow.sponsorBlockDisabledUntil =
+          Date.now() + CONFIG.sponsorBlockFailureCooldownMs;
+      }
+      STATE.slideshow.skipSegmentCache[videoId] = 0;
       return 0;
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      STATE.slideshow.sponsorBlockDisabledUntil =
+        Date.now() + CONFIG.sponsorBlockFailureCooldownMs;
+      STATE.slideshow.skipSegmentCache[videoId] = 0;
       return 0;
     }
+  },
+
+  parseItemIdFromListLine(line) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith("#")) return null;
+
+    const detailsUrlMatch = trimmedLine.match(/(?:[?&#]|^)id=([a-f0-9]{32})/i);
+    if (detailsUrlMatch) return detailsUrlMatch[1];
+
+    const match = trimmedLine.match(/[a-f0-9]{32}/i);
+    return match ? match[0] : null;
   },
 
   /**
@@ -872,20 +1333,30 @@ const ApiUtils = {
    */
   async fetchItemIdsFromList() {
     try {
-      const listFileName = `${STATE.jellyfinData.serverAddress}/web/avatars/list.txt?userId=${STATE.jellyfinData.userId}`;
-      const response = await fetch(listFileName);
+      const configuredPath = CONFIG.itemList?.path || "/web/avatars/list.txt";
+      const listUrl = new URL(configuredPath, STATE.jellyfinData.serverAddress);
+      listUrl.searchParams.set("userId", STATE.jellyfinData.userId || "");
+
+      const response = await fetch(listUrl.toString());
 
       if (!response.ok) {
         console.warn("list.txt not found or inaccessible. Using random items.");
         return [];
       }
 
+      const maxItems = Math.max(1, CONFIG.itemList?.maxItems || 5);
+      const seen = new Set();
       const text = await response.text();
       return text
         .split("\n")
-        .map((id) => id.trim())
+        .map((line) => this.parseItemIdFromListLine(line))
         .filter((id) => id)
-        .slice(1);
+        .filter((id) => {
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        })
+        .slice(0, maxItems);
     } catch (error) {
       console.error("Error fetching list.txt:", error);
       return [];
@@ -1111,6 +1582,8 @@ const VisibilityObserver = {
 
     if (!container) return;
 
+    LayoutUtils.syncLayoutClass(container);
+
     const isVisible =
       (window.location.hash === "#/home.html" ||
         window.location.hash === "#/home") &&
@@ -1126,12 +1599,9 @@ const VisibilityObserver = {
       }
       Object.keys(STATE.slideshow.players).forEach((itemId) => {
         const player = STATE.slideshow.players[itemId];
-        if (player && typeof player.destroy === "function") {
-          try {
-            player.destroy();
-          } catch (e) {}
-        }
+        PlayerUtils.destroy(player);
       });
+      SlideshowManager.clearAllTrailerWatchdogs();
       STATE.slideshow.players = {};
       container.querySelectorAll(".slide").forEach((slide) => slide.remove());
       STATE.slideshow.createdSlides = {};
@@ -1329,12 +1799,15 @@ const SlideCreator = {
    * @param {string} imageType - Image type (Backdrop, Logo, Primary, etc.)
    * @param {number} [index] - Image index (for Backdrop, Primary, etc.)
    * @param {string} serverAddress - Server address
-   * @param {number} [quality] - Image quality (0-100). If tag is available, both tag and quality are used.
-   * @returns {string} Image URL with tag parameter (and quality if tag available), or quality-only fallback
+   * @param {number|Object} [options] - Image quality number, or image request options.
+   * @returns {string} Image URL with cache tag and sizing parameters.
    */
-  buildImageUrl(item, imageType, index, serverAddress, quality) {
+  buildImageUrl(item, imageType, index, serverAddress, options = {}) {
     const itemId = item.Id;
     let tag = null;
+    const requestOptions =
+      typeof options === "number" ? { quality: options } : options || {};
+    const { quality, maxWidth, maxHeight } = requestOptions;
 
     if (imageType === "Backdrop") {
       if (
@@ -1363,81 +1836,15 @@ const SlideCreator = {
       baseUrl = `${serverAddress}/Items/${itemId}/Images/${imageType}`;
     }
 
-    if (tag) {
-      const qualityParam = quality !== undefined ? `&quality=${quality}` : "";
-      return `${baseUrl}?tag=${tag}${qualityParam}`;
-    } else {
-      const qualityParam = quality !== undefined ? quality : 90;
-      return `${baseUrl}?quality=${qualityParam}`;
-    }
+    const params = new URLSearchParams();
+    if (tag) params.set("tag", tag);
+    if (quality !== undefined || !tag) params.set("quality", `${quality ?? 90}`);
+    if (maxWidth) params.set("maxWidth", `${maxWidth}`);
+    if (maxHeight) params.set("maxHeight", `${maxHeight}`);
+
+    return `${baseUrl}?${params.toString()}`;
   },
 
-  /**
-   * Picks the YouTube video id of the most appropriate trailer for an item.
-   *
-   * RemoteTrailers arrives in metadata provider order, which is not preference
-   * order. The first entry is frequently a promo clip, a teaser or an
-   * accessibility variant rather than the main trailer, and it is not
-   * guaranteed to be a YouTube link at all. Entries are ranked by name, with
-   * provider order breaking ties, and any entry that does not yield a video id
-   * is skipped instead of losing the trailer for that slide. Alternate cuts
-   * are demoted within their tier: they lose to an ordinary entry of the same
-   * tier but still beat lower tier promo clips.
-   *
-   * @param {Array} remoteTrailers - RemoteTrailers array from the item
-   * @returns {string|null} YouTube video id, or null if no entry is usable
-   */
-  selectTrailerVideoId(remoteTrailers) {
-    if (!Array.isArray(remoteTrailers) || remoteTrailers.length === 0) {
-      return null;
-    }
-
-    const rankName = (name) => {
-      const text = (name || "").toLowerCase();
-      const isAlternateCut = CONFIG.trailerAlternateCutTerms.some((term) =>
-        text.includes(term),
-      );
-
-      let rank;
-      if (text.includes("official trailer")) rank = 5;
-      else if (text.includes("final trailer") || text.includes("main trailer"))
-        rank = 4;
-      else if (text.includes("trailer")) rank = 3;
-      else if (text.includes("teaser")) rank = 2;
-      else rank = 1;
-
-      return isAlternateCut ? rank - 0.5 : rank;
-    };
-
-    let best = null;
-
-    for (const trailer of remoteTrailers) {
-      let videoId = null;
-      try {
-        const urlObj = new URL(trailer.Url);
-        const host = urlObj.hostname.replace(/^www\./, "");
-        if (host === "youtu.be") {
-          videoId = urlObj.pathname.split("/")[1] || null;
-        } else if (
-          (host === "youtube.com" || host === "m.youtube.com") &&
-          urlObj.pathname.startsWith("/embed/")
-        ) {
-          videoId = urlObj.pathname.split("/")[2] || null;
-        } else {
-          videoId = urlObj.searchParams.get("v");
-        }
-      } catch (e) {}
-
-      if (!videoId) continue;
-
-      const rank = rankName(trailer.Name);
-      if (!best || rank > best.rank) {
-        best = { videoId, rank };
-      }
-    }
-
-    return best ? best.videoId : null;
-  },
 
   /**
    * Creates a slide element for an item
@@ -1462,13 +1869,22 @@ const SlideCreator = {
     let videoId = null;
     let trailerContainer = null;
 
-    if (CONFIG.enableTrailers) {
-      videoId = this.selectTrailerVideoId(item.RemoteTrailers);
+    if (
+      CONFIG.enableTrailers &&
+      item.RemoteTrailers &&
+      item.RemoteTrailers.length > 0
+    ) {
+      const selectedTrailer = TrailerUtils.pickBestTrailer(item.RemoteTrailers);
+      videoId = selectedTrailer?.videoId || null;
 
       if (videoId) {
         trailerContainer = SlideUtils.createElement("div", {
           className: "video-container",
           id: `trailer-${item.Id}`,
+          "data-trailer-video-id": videoId,
+          "data-trailer-name": TrailerUtils.getTrailerName(
+            selectedTrailer.trailer,
+          ),
         });
 
         const playerDiv = SlideUtils.createElement("div", {
@@ -1483,7 +1899,10 @@ const SlideCreator = {
 
     const backdrop = SlideUtils.createElement("img", {
       className: "backdrop high-quality",
-      src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
+      src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, {
+        quality: 60,
+        maxWidth: CONFIG.imageSizing.backdropMaxWidth,
+      }),
       alt: LocalizationUtils.getLocalizedString("Backdrop", "Backdrop"),
       loading: "eager",
     });
@@ -1499,7 +1918,10 @@ const SlideCreator = {
 
     const logo = SlideUtils.createElement("img", {
       className: "logo high-quality",
-      src: this.buildImageUrl(item, "Logo", undefined, serverAddress, 40),
+      src: this.buildImageUrl(item, "Logo", undefined, serverAddress, {
+        quality: 40,
+        maxWidth: CONFIG.imageSizing.logoMaxWidth,
+      }),
       alt: item.Name,
       loading: "eager",
     });
@@ -1755,11 +2177,133 @@ const SlideCreator = {
     return placeholder;
   },
 
-  /**
-   * Creates a slide for an item and adds it to the container
-   * @param {string} itemId - Item ID
-   * @returns {Promise<HTMLElement>} Created slide element
-   */
+  warmSlideImages(slide) {
+    if (!slide) return;
+
+    slide.querySelectorAll("img").forEach((image) => {
+      image.loading = "eager";
+      image.decoding = "async";
+      image.fetchPriority = slide.classList.contains("active") ? "high" : "low";
+    });
+  },
+
+  waitForImageReady(image, timeoutMs = CONFIG.artworkLoadTimeoutMs) {
+    if (!image) return Promise.resolve(true);
+
+    image.loading = "eager";
+    image.decoding = "async";
+    image.fetchPriority = "high";
+
+    if (image.complete && image.naturalWidth > 0) {
+      if (typeof image.decode === "function") {
+        return image
+          .decode()
+          .then(() => true)
+          .catch(() => true);
+      }
+      return Promise.resolve(true);
+    }
+
+    if (image.complete && image.naturalWidth === 0) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const finish = async (isReady) => {
+        if (settled) return;
+        settled = true;
+        image.removeEventListener("load", onLoad);
+        image.removeEventListener("error", onError);
+        clearTimeout(timer);
+
+        if (isReady && typeof image.decode === "function") {
+          try {
+            await image.decode();
+          } catch (error) {}
+        }
+
+        resolve(isReady);
+      };
+
+      const onLoad = () => finish(image.naturalWidth > 0);
+      const onError = () => finish(false);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+
+      image.addEventListener("load", onLoad, { once: true });
+      image.addEventListener("error", onError, { once: true });
+    });
+  },
+
+  async waitForSlideArtwork(
+    slide,
+    timeoutMs = CONFIG.artworkLoadTimeoutMs,
+    warnOnTimeout = true,
+  ) {
+    if (!slide) return false;
+
+    const artworkImages = [
+      slide.querySelector(".backdrop"),
+      slide.querySelector(".logo"),
+    ].filter(Boolean);
+
+    if (artworkImages.length === 0) return true;
+
+    const results = await Promise.all(
+      artworkImages.map((image) => this.waitForImageReady(image, timeoutMs)),
+    );
+    const allReady = results.every(Boolean);
+
+    if (!allReady && warnOnTimeout) {
+      console.warn(
+        "Timed out waiting for slide artwork; continuing transition.",
+        slide.dataset.itemId,
+      );
+    }
+
+    return allReady;
+  },
+
+  initializeTrailerPlayer(itemId, videoId, trailerContainer) {
+    if (!videoId) return;
+
+    (async () => {
+      const startTime = await ApiUtils.getSkipSegments(videoId);
+      STATE.slideshow.trailerStartTimes[itemId] = startTime;
+      if (trailerContainer) {
+        trailerContainer.dataset.startTime = String(startTime);
+      }
+
+      const YT = await loadYouTubeAPI();
+      if (!YT) return;
+      if (!document.getElementById(`trailer-${itemId}`)) return;
+
+      STATE.slideshow.players[itemId] = new YT.Player(`yt-player-${itemId}`, {
+        videoId: videoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          rel: 0,
+          showinfo: 0,
+          start: startTime,
+        },
+        events: {
+          onStateChange: (e) =>
+            SlideshowManager.onPlayerStateChange(e, itemId, trailerContainer),
+          onError: (e) => SlideshowManager.onPlayerError(e, itemId),
+          onReady: (e) => PlayerUtils.call(e.target, "mute"),
+        },
+      });
+    })().catch((error) => {
+      console.warn("Error initializing trailer player:", error);
+    });
+  },
+
   /**
    * Creates a slide for an item and adds it to the container
    * @param {string} itemId - Item ID
@@ -1773,49 +2317,22 @@ const SlideCreator = {
 
       const container = SlideUtils.getOrCreateSlidesContainer();
       const item = await ApiUtils.fetchItemDetails(itemId);
+      if (!item) return null;
 
-      const { slide, videoId, trailerContainer } = this.createSlideElement(
+      const slideData = this.createSlideElement(
         item,
         item.Type === "Movie" ? "Movie" : "TV Show",
       );
+      if (!slideData?.slide) return null;
+
+      const { slide, videoId, trailerContainer } = slideData;
+      this.warmSlideImages(slide);
 
       container.appendChild(slide);
       STATE.slideshow.createdSlides[itemId] = true;
 
       if (videoId) {
-        const startTime = await ApiUtils.getSkipSegments(videoId);
-
-        loadYouTubeAPI().then((YT) => {
-          if (!YT) return;
-          if (!document.getElementById(`trailer-${itemId}`)) return;
-
-          STATE.slideshow.players[itemId] = new YT.Player(
-            `yt-player-${itemId}`,
-            {
-              videoId: videoId,
-              playerVars: {
-                autoplay: 0,
-                controls: 0,
-                disablekb: 1,
-                fs: 0,
-                iv_load_policy: 3,
-                modestbranding: 1,
-                rel: 0,
-                showinfo: 0,
-                start: startTime,
-              },
-              events: {
-                onStateChange: (e) =>
-                  SlideshowManager.onPlayerStateChange(
-                    e,
-                    itemId,
-                    trailerContainer,
-                  ),
-                onReady: (e) => e.target.mute(),
-              },
-            },
-          );
-        });
+        this.initializeTrailerPlayer(itemId, videoId, trailerContainer);
       }
 
       return slide;
@@ -1877,6 +2394,106 @@ const SlideshowManager = {
     });
   },
 
+  clearTrailerWatchdog(itemId) {
+    const watchdog = STATE.slideshow.trailerWatchdogs[itemId];
+    if (!watchdog) return;
+
+    clearTimeout(watchdog);
+    delete STATE.slideshow.trailerWatchdogs[itemId];
+  },
+
+  clearAllTrailerWatchdogs() {
+    Object.keys(STATE.slideshow.trailerWatchdogs).forEach((itemId) => {
+      this.clearTrailerWatchdog(itemId);
+    });
+  },
+
+  getTrailerWatchdogDelay(player) {
+    const duration = PlayerUtils.getNumber(player, "getDuration", false);
+    const currentTime = PlayerUtils.getNumber(player, "getCurrentTime") || 0;
+
+    if (!duration) return CONFIG.trailerPlaybackMaxMs;
+
+    const remainingMs =
+      Math.max(0, duration - currentTime) * 1000 + CONFIG.trailerEndGraceMs;
+
+    return Math.max(
+      CONFIG.trailerPlaybackMinMs,
+      Math.min(CONFIG.trailerPlaybackMaxMs, remainingMs),
+    );
+  },
+
+  isActiveTrailerSlide(itemId, slide) {
+    const currentItemId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+
+    return (
+      itemId === currentItemId &&
+      slide?.classList.contains("active") &&
+      !STATE.slideshow.isPaused &&
+      VisibilityObserver.wasVisible &&
+      !document.hidden
+    );
+  },
+
+  startTrailerWatchdog(itemId, player, delayMs) {
+    this.clearTrailerWatchdog(itemId);
+
+    const timeoutMs = delayMs || this.getTrailerWatchdogDelay(player);
+    const watchdog = setTimeout(() => {
+      if (STATE.slideshow.trailerWatchdogs[itemId] === watchdog) {
+        delete STATE.slideshow.trailerWatchdogs[itemId];
+      }
+
+      const slide = document.querySelector(`.slide[data-item-id="${itemId}"]`);
+      if (!this.isActiveTrailerSlide(itemId, slide)) return;
+
+      console.warn("Trailer did not finish cleanly; advancing slide.", itemId);
+      this.finishTrailerPlayback(itemId, { advance: true });
+    }, timeoutMs);
+    STATE.slideshow.trailerWatchdogs[itemId] = watchdog;
+  },
+
+  finishTrailerPlayback(itemId, options = {}) {
+    const { advance = false, restartTimer = false } = options;
+    const slide = document.querySelector(`.slide[data-item-id="${itemId}"]`);
+    const currentItemId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    const isCurrentSlide = itemId === currentItemId;
+
+    this.clearTrailerWatchdog(itemId);
+
+    if (isCurrentSlide) {
+      STATE.slideshow.isVideoPlaying = false;
+    }
+
+    slide?.querySelector(".video-container")?.classList.remove("active");
+    slide?.querySelector(".backdrop")?.classList.remove("with-video");
+    slide?.querySelector(".plot-container")?.classList.remove("with-video");
+
+    if (advance && this.isActiveTrailerSlide(itemId, slide)) {
+      if (STATE.slideshow.slideInterval) {
+        STATE.slideshow.slideInterval.restart();
+      }
+      this.nextSlide();
+      return;
+    }
+
+    if (
+      restartTimer &&
+      isCurrentSlide &&
+      !STATE.slideshow.isPaused &&
+      STATE.slideshow.slideInterval
+    ) {
+      STATE.slideshow.slideInterval.restart();
+    }
+  },
+
+  onPlayerError(event, itemId) {
+    console.warn("Trailer player error; advancing slide.", event?.data, itemId);
+    this.finishTrailerPlayback(itemId, { advance: true, restartTimer: true });
+  },
+
   toggleMute() {
     STATE.slideshow.isMuted = !STATE.slideshow.isMuted;
 
@@ -1890,14 +2507,7 @@ const SlideshowManager = {
       STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
     const player = STATE.slideshow.players[currentId];
 
-    if (player && typeof player.setVolume === "function") {
-      if (STATE.slideshow.isMuted) {
-        player.mute();
-      } else {
-        player.unMute();
-        player.setVolume(50);
-      }
-    }
+    PlayerUtils.applyMuteState(player);
   },
 
   /**
@@ -1914,16 +2524,9 @@ const SlideshowManager = {
       STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
     if (prevItemId && STATE.slideshow.players[prevItemId]) {
       try {
-        if (
-          typeof STATE.slideshow.players[prevItemId].pauseVideo === "function"
-        ) {
-          STATE.slideshow.players[prevItemId].pauseVideo();
-          if (
-            typeof STATE.slideshow.players[prevItemId].seekTo === "function"
-          ) {
-            STATE.slideshow.players[prevItemId].seekTo(0);
-          }
-        }
+        this.clearTrailerWatchdog(prevItemId);
+        PlayerUtils.call(STATE.slideshow.players[prevItemId], "pauseVideo");
+        PlayerUtils.call(STATE.slideshow.players[prevItemId], "seekTo", 0);
         STATE.slideshow.isVideoPlaying = false;
 
         const prevSlide = document.querySelector(
@@ -1943,6 +2546,7 @@ const SlideshowManager = {
 
     STATE.slideshow.isTransitioning = true;
     const container = SlideUtils.getOrCreateSlidesContainer();
+    const prevVisible = container.querySelector(".slide.active");
     index = Math.max(0, Math.min(index, STATE.slideshow.totalItems - 1));
     const currentItemId = STATE.slideshow.itemIds[index];
 
@@ -1951,9 +2555,43 @@ const SlideshowManager = {
     );
     if (!currentSlide)
       currentSlide = await SlideCreator.createSlideForItemId(currentItemId);
+    if (!currentSlide) {
+      STATE.slideshow.isTransitioning = false;
+      fallbackToTimer();
+      return;
+    }
 
-    const prevVisible = container.querySelector(".slide.active");
-    if (prevVisible) prevVisible.classList.remove("active");
+    currentSlide
+      .querySelectorAll("img")
+      .forEach((image) => (image.fetchPriority = "high"));
+    const artworkTimeout = prevVisible
+      ? CONFIG.artworkLoadTimeoutMs
+      : CONFIG.initialArtworkLoadTimeoutMs;
+    await SlideCreator.waitForSlideArtwork(
+      currentSlide,
+      artworkTimeout,
+      Boolean(prevVisible),
+    );
+
+    if (prevVisible) {
+      prevVisible.classList.remove("active");
+      prevVisible
+        .querySelectorAll("img")
+        .forEach((image) => (image.fetchPriority = "low"));
+    }
+
+    container.querySelectorAll(".video-container.active").forEach((video) => {
+      if (!video.closest(`.slide[data-item-id="${currentItemId}"]`)) {
+        video.classList.remove("active");
+      }
+    });
+    container
+      .querySelectorAll(".backdrop.with-video, .plot-container.with-video")
+      .forEach((element) => {
+        if (!element.closest(`.slide[data-item-id="${currentItemId}"]`)) {
+          element.classList.remove("with-video");
+        }
+      });
 
     currentSlide.classList.add("active");
     if (CONFIG.slideAnimationEnabled) {
@@ -1967,33 +2605,60 @@ const SlideshowManager = {
     this.preloadAdjacentSlides(index);
     this.pruneSlideCache();
 
-    const itemData = STATE.slideshow.loadedItems[currentItemId];
     const hasTrailerData =
-      CONFIG.enableTrailers &&
-      itemData &&
-      itemData.RemoteTrailers &&
-      itemData.RemoteTrailers.length > 0;
+      CONFIG.enableTrailers && currentSlide.querySelector(".video-container");
 
     if (hasTrailerData) {
-      setTimeout(() => {
+      setTimeout(async () => {
         if (
           STATE.slideshow.currentSlideIndex === index &&
           !STATE.slideshow.isPaused &&
           VisibilityObserver.wasVisible
         ) {
-          const player = STATE.slideshow.players[currentItemId];
+          if (LayoutUtils.isPortraitPhone()) {
+            fallbackToTimer();
+            return;
+          }
+
+          const artworkReady = await SlideCreator.waitForSlideArtwork(
+            currentSlide,
+            CONFIG.artworkLoadTimeoutMs,
+            false,
+          );
+          if (!artworkReady) {
+            fallbackToTimer();
+            return;
+          }
+
+          const player = await PlayerUtils.waitForPlayable(currentItemId);
+          if (
+            STATE.slideshow.currentSlideIndex !== index ||
+            STATE.slideshow.isPaused ||
+            !VisibilityObserver.wasVisible ||
+            !currentSlide.classList.contains("active")
+          ) {
+            return;
+          }
 
           if (player && typeof player.playVideo === "function") {
             try {
-              if (STATE.slideshow.isMuted) {
-                player.mute();
+              PlayerUtils.applyMuteState(player);
+              const startTime =
+                STATE.slideshow.trailerStartTimes[currentItemId] ??
+                Number(
+                  currentSlide.querySelector(".video-container")?.dataset
+                    .startTime || 0,
+                );
+              PlayerUtils.call(player, "seekTo", startTime);
+              if (!PlayerUtils.call(player, "playVideo")) {
+                fallbackToTimer();
               } else {
-                player.unMute();
-                player.setVolume(50);
+                this.startTrailerWatchdog(
+                  currentItemId,
+                  player,
+                  CONFIG.trailerStartupTimeoutMs,
+                );
               }
-
-              player.seekTo(0);
-              player.playVideo();
             } catch (e) {
               fallbackToTimer();
             }
@@ -2021,7 +2686,6 @@ const SlideshowManager = {
     }, CONFIG.fadeTransitionDuration);
     setTimeout(() => {
       if (STATE.slideshow.isTransitioning) {
-        console.warn("Forcing transition unlock");
         STATE.slideshow.isTransitioning = false;
       }
     }, 2000);
@@ -2056,16 +2720,16 @@ const SlideshowManager = {
     const totalItems = STATE.slideshow.totalItems;
     const preloadCount = CONFIG.preloadCount;
 
-    const nextIndex = (currentIndex + 1) % totalItems;
-    const itemId = STATE.slideshow.itemIds[nextIndex];
-
-    await SlideCreator.createSlideForItemId(itemId);
-
-    if (preloadCount > 1) {
-      const prevIndex = (currentIndex - 1 + totalItems) % totalItems;
+    for (let offset = 1; offset <= preloadCount; offset += 1) {
+      const nextIndex = (currentIndex + offset) % totalItems;
+      const prevIndex = (currentIndex - offset + totalItems) % totalItems;
+      const nextItemId = STATE.slideshow.itemIds[nextIndex];
       const prevItemId = STATE.slideshow.itemIds[prevIndex];
 
-      SlideCreator.createSlideForItemId(prevItemId);
+      SlideCreator.createSlideForItemId(nextItemId);
+      if (preloadCount > 1) {
+        SlideCreator.createSlideForItemId(prevItemId);
+      }
     }
   },
 
@@ -2097,17 +2761,21 @@ const SlideshowManager = {
       const index = STATE.slideshow.itemIds.indexOf(itemId);
       if (index === -1) return;
 
-      const distance = Math.abs(index - currentIndex);
+      const rawDistance = Math.abs(index - currentIndex);
+      const distance = Math.min(
+        rawDistance,
+        STATE.slideshow.totalItems - rawDistance,
+      );
       if (distance > keepRange) {
         if (STATE.slideshow.players[itemId]) {
           try {
-            if (typeof STATE.slideshow.players[itemId].destroy === "function") {
-              STATE.slideshow.players[itemId].destroy();
-            }
+            this.clearTrailerWatchdog(itemId);
+            PlayerUtils.destroy(STATE.slideshow.players[itemId]);
           } catch (e) {
             console.warn("Error destroying player:", e);
           }
           delete STATE.slideshow.players[itemId];
+          delete STATE.slideshow.trailerStartTimes[itemId];
         }
 
         delete STATE.slideshow.loadedItems[itemId];
@@ -2119,7 +2787,6 @@ const SlideshowManager = {
 
         delete STATE.slideshow.createdSlides[itemId];
 
-        console.log(`Pruned slide ${itemId} at distance ${distance} from view`);
       }
     });
   },
@@ -2139,9 +2806,8 @@ const SlideshowManager = {
       const playLabel = LocalizationUtils.getLocalizedString("Play", "Play");
       pauseButton.setAttribute("aria-label", playLabel);
       pauseButton.setAttribute("title", playLabel);
-      if (player && typeof player.pauseVideo === "function") {
-        player.pauseVideo();
-      }
+      this.clearTrailerWatchdog(currentId);
+      PlayerUtils.call(player, "pauseVideo");
     } else {
       if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.start();
       pauseButton.innerHTML = '<i class="material-icons">pause</i>';
@@ -2152,8 +2818,14 @@ const SlideshowManager = {
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
 
-      if (player && typeof player.playVideo === "function") {
-        player.playVideo();
+      if (!LayoutUtils.isPortraitPhone()) {
+        if (PlayerUtils.call(player, "playVideo")) {
+          this.startTrailerWatchdog(
+            currentId,
+            player,
+            CONFIG.trailerStartupTimeoutMs,
+          );
+        }
       }
     }
   },
@@ -2259,26 +2931,45 @@ const SlideshowManager = {
     if (!slide) return;
     const backdrop = slide.querySelector(".backdrop");
     const plotContainer = slide.querySelector(".plot-container");
+    const currentItemId =
+      STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
 
     if (event.data === YT.PlayerState.PLAYING) {
+      if (
+        itemId !== currentItemId ||
+        !slide.classList.contains("active") ||
+        LayoutUtils.isPortraitPhone()
+      ) {
+        PlayerUtils.call(STATE.slideshow.players[itemId], "pauseVideo");
+        this.finishTrailerPlayback(itemId, {
+          restartTimer: itemId === currentItemId,
+        });
+        return;
+      }
+
       STATE.slideshow.isVideoPlaying = true;
       if (container) container.classList.add("active");
       if (backdrop) backdrop.classList.add("with-video");
       if (plotContainer) plotContainer.classList.add("with-video");
       if (STATE.slideshow.slideInterval) STATE.slideshow.slideInterval.stop();
+      this.startTrailerWatchdog(itemId, STATE.slideshow.players[itemId]);
     } else if (event.data === YT.PlayerState.ENDED) {
-      STATE.slideshow.isVideoPlaying = false;
-      if (container) container.classList.remove("active");
-      if (backdrop) backdrop.classList.remove("with-video");
-      if (plotContainer) plotContainer.classList.remove("with-video");
-      if (STATE.slideshow.slideInterval)
-        STATE.slideshow.slideInterval.restart();
-      this.nextSlide();
+      this.finishTrailerPlayback(itemId, { advance: true });
     } else if (
       event.data === YT.PlayerState.PAUSED ||
       event.data === YT.PlayerState.CUED
     ) {
       STATE.slideshow.isVideoPlaying = false;
+      if (
+        this.isActiveTrailerSlide(itemId, slide) &&
+        container?.classList.contains("active")
+      ) {
+        this.startTrailerWatchdog(
+          itemId,
+          STATE.slideshow.players[itemId],
+          CONFIG.trailerIdleAdvanceMs,
+        );
+      }
     }
   },
 
@@ -2290,12 +2981,15 @@ const SlideshowManager = {
       STATE.slideshow.isLoading = true;
 
       let itemIds = await ApiUtils.fetchItemIdsFromList();
+      const hasPinnedItemList = itemIds.length > 0;
 
-      if (itemIds.length === 0) {
+      if (!hasPinnedItemList) {
         itemIds = await ApiUtils.fetchItemIdsFromServer();
       }
 
-      itemIds = SlideUtils.shuffleArray(itemIds);
+      if (!hasPinnedItemList) {
+        itemIds = SlideUtils.shuffleArray(itemIds);
+      }
 
       STATE.slideshow.itemIds = itemIds;
       STATE.slideshow.totalItems = itemIds.length;
@@ -2309,7 +3003,6 @@ const SlideshowManager = {
       }, CONFIG.shuffleInterval);
 
       STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
 
       await this.updateCurrentSlide(0);
 
@@ -2546,7 +3239,6 @@ const initPageVisibilityHandler = () => {
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      console.log("Tab inactive - pausing slideshow and videos");
       wasVideoPlayingBeforeHide = STATE.slideshow.isVideoPlaying;
       if (STATE.slideshow.slideInterval) {
         STATE.slideshow.slideInterval.stop();
@@ -2557,7 +3249,8 @@ const initPageVisibilityHandler = () => {
         const player = STATE.slideshow.players[currentItemId];
         if (typeof player.pauseVideo === "function") {
           try {
-            player.pauseVideo();
+            SlideshowManager.clearTrailerWatchdog(currentItemId);
+            PlayerUtils.call(player, "pauseVideo");
             STATE.slideshow.isVideoPlaying = false;
           } catch (e) {
             console.warn("Error pausing video on tab hide:", e);
@@ -2565,20 +3258,35 @@ const initPageVisibilityHandler = () => {
         }
       }
     } else {
-      console.log("Tab active - resuming slideshow");
       if (!STATE.slideshow.isPaused && VisibilityObserver.wasVisible) {
         const currentItemId =
           STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
         if (
           wasVideoPlayingBeforeHide &&
           currentItemId &&
-          STATE.slideshow.players[currentItemId]
+          STATE.slideshow.players[currentItemId] &&
+          !LayoutUtils.isPortraitPhone()
         ) {
           const player = STATE.slideshow.players[currentItemId];
           if (typeof player.playVideo === "function") {
             try {
-              player.playVideo();
-              STATE.slideshow.isVideoPlaying = true;
+              STATE.slideshow.isVideoPlaying = PlayerUtils.call(
+                player,
+                "playVideo",
+              );
+              if (STATE.slideshow.isVideoPlaying) {
+                SlideshowManager.startTrailerWatchdog(
+                  currentItemId,
+                  player,
+                  CONFIG.trailerStartupTimeoutMs,
+                );
+              }
+              if (
+                !STATE.slideshow.isVideoPlaying &&
+                STATE.slideshow.slideInterval
+              ) {
+                STATE.slideshow.slideInterval.start();
+              }
             } catch (e) {
               console.warn("Error resuming video on tab show:", e);
               if (STATE.slideshow.slideInterval) {
@@ -2605,6 +3313,7 @@ window.slideshowPure = {
   SlideCreator,
   SlideshowManager,
   VisibilityObserver,
+  LayoutUtils,
   PageBackdrop,
   initSlideshowData: () => {
     SlideshowManager.loadSlideshowData();
