@@ -1,0 +1,375 @@
+/*
+ * Jellyfin Media Bar - Jellyfin 12 immersive shell support
+ *
+ * Load this after slideshowpure.css on Jellyfin 12. It intentionally avoids
+ * theme-specific selectors; the rules key off the structural v12 layout class
+ * added by slideshowpure.js.
+ */
+
+.jellyfin-v12-layout {
+  --mb-v12-content-left: clamp(3rem, 5vw, 5.5rem);
+  /* The slide content is stacked in vh from the vertical middle: the button
+     row starts at 50% + 17vh (slideshowpure.css) and is ~2.6rem tall. The
+     home rows must never start above that, whatever the viewport height,
+     so every row-top formula below is floored by this value. */
+  --mb-v12-content-floor: calc(67vh + 4.5rem);
+  --mb-v12-home-row-top: max(clamp(35.5rem, calc(50vh + 14.5rem), 50rem), var(--mb-v12-content-floor));
+  --mb-v12-bottom-fade-mask: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 62%,
+    rgb(0 0 0 / 0.82) 76%,
+    rgb(0 0 0 / 0.38) 90%,
+    transparent 100%
+  );
+}
+
+.jellyfin-v12-layout #slides-container {
+  position: absolute;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 1;
+}
+
+.jellyfin-v12-layout #slides-container,
+.jellyfin-v12-layout #slides-container .slide,
+.jellyfin-v12-layout #slides-container .backdrop-container,
+.jellyfin-v12-layout #slides-container .backdrop,
+.jellyfin-v12-layout #slides-container .backdrop-overlay,
+.jellyfin-v12-layout #slides-container .gradient-overlay,
+.jellyfin-v12-layout #slides-container .video-container,
+.jellyfin-v12-layout #slides-container .video-player,
+.jellyfin-v12-layout #slides-container .video-player iframe {
+  border-radius: 0;
+}
+
+.jellyfin-v12-layout #slides-container .slide {
+  overflow: hidden;
+}
+
+.jellyfin-v12-layout #slides-container .video-container {
+  width: 100vw;
+  height: 56.25vw;
+  min-width: 177.778vh;
+  min-height: 100vh;
+  z-index: 1;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, transparent 18%, rgb(0 0 0 / 0.35) 26%, rgb(0 0 0 / 0.82) 34%, #000 42%),
+    linear-gradient(to top, transparent 0%, rgb(0 0 0 / 0.78) 12%, #000 26%),
+    var(--mb-v12-bottom-fade-mask);
+  mask-image:
+    linear-gradient(to right, transparent 0%, transparent 18%, rgb(0 0 0 / 0.35) 26%, rgb(0 0 0 / 0.82) 34%, #000 42%),
+    linear-gradient(to top, transparent 0%, rgb(0 0 0 / 0.78) 12%, #000 26%),
+    var(--mb-v12-bottom-fade-mask);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.jellyfin-v12-layout #slides-container .backdrop-container,
+.jellyfin-v12-layout #slides-container .backdrop-overlay,
+.jellyfin-v12-layout #slides-container .gradient-overlay {
+  -webkit-mask-image: var(--mb-v12-bottom-fade-mask);
+  mask-image: var(--mb-v12-bottom-fade-mask);
+}
+
+.jellyfin-v12-layout #slides-container .backdrop {
+  object-position: center center;
+}
+
+.jellyfin-v12-layout #slides-container .backdrop.with-video {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(84vw, 96rem);
+  max-width: none;
+  height: 100%;
+  opacity: 0.9;
+  filter: brightness(0.9) saturate(1.1);
+  object-position: center center;
+  z-index: 2;
+  transition:
+    opacity 700ms ease,
+    filter 700ms ease,
+    transform 900ms cubic-bezier(0.2, 0.82, 0.22, 1),
+    object-position 900ms cubic-bezier(0.2, 0.82, 0.22, 1);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.jellyfin-v12-layout #slides-container .slide:has(.video-container.active) .backdrop-container {
+  z-index: 2;
+  -webkit-mask-image:
+    linear-gradient(to right, #000 0%, #000 24%, rgb(0 0 0 / 0.72) 31%, rgb(0 0 0 / 0.18) 37%, transparent 42%),
+    linear-gradient(to top, transparent 0%, rgb(0 0 0 / 0.7) 10%, #000 22%),
+    var(--mb-v12-bottom-fade-mask);
+  mask-image:
+    linear-gradient(to right, #000 0%, #000 24%, rgb(0 0 0 / 0.72) 31%, rgb(0 0 0 / 0.18) 37%, transparent 42%),
+    linear-gradient(to top, transparent 0%, rgb(0 0 0 / 0.7) 10%, #000 22%),
+    var(--mb-v12-bottom-fade-mask);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.jellyfin-v12-layout #slides-container .gradient-overlay {
+  z-index: 4;
+  background:
+    linear-gradient(90deg, rgb(0 0 0 / 0.56) 0%, rgb(0 0 0 / 0.34) 28%, rgb(0 0 0 / 0.14) 58%, rgb(0 0 0 / 0) 100%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.36) 0%, rgb(0 0 0 / 0.08) 24%, rgb(0 0 0 / 0) 42%),
+    linear-gradient(0deg, rgb(0 0 0 / 0.54) 0%, rgb(0 0 0 / 0.22) 18%, rgb(0 0 0 / 0) 50%);
+}
+
+.jellyfin-v12-layout #slides-container .backdrop-overlay {
+  background: rgb(0 0 0 / 0.08);
+}
+
+.jellyfin-v12-layout #slides-container .slide:has(.video-container.active) .gradient-overlay {
+  background:
+    linear-gradient(90deg, rgb(0 0 0 / 0.62) 0%, rgb(0 0 0 / 0.42) 24%, rgb(0 0 0 / 0.24) 34%, rgb(0 0 0 / 0.08) 48%, rgb(0 0 0 / 0) 70%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.34) 0%, rgb(0 0 0 / 0.07) 24%, rgb(0 0 0 / 0) 42%),
+    linear-gradient(0deg, rgb(0 0 0 / 0.58) 0%, rgb(0 0 0 / 0.26) 18%, rgb(0 0 0 / 0) 52%);
+}
+
+.jellyfin-v12-layout #slides-container .slide:has(.video-container.active) .backdrop-overlay {
+  background: rgb(0 0 0 / 0.04);
+}
+
+@keyframes mb-v12-poster-yield-to-trailer {
+  from {
+    transform: translateX(0) scale(1.015);
+    object-position: center center;
+  }
+
+  to {
+    transform: translateX(clamp(-14rem, -13vw, -7rem)) scale(1.04);
+    object-position: 64% center;
+  }
+}
+
+.jellyfin-v12-layout #slides-container .logo-container,
+.jellyfin-v12-layout #slides-container .info-container,
+.jellyfin-v12-layout #slides-container .genre,
+.jellyfin-v12-layout #slides-container .plot-container,
+.jellyfin-v12-layout #slides-container .button-container {
+  left: var(--mb-v12-content-left);
+}
+
+.jellyfin-v12-layout #slides-container .logo-container,
+.jellyfin-v12-layout #slides-container .info-container,
+.jellyfin-v12-layout #slides-container .genre,
+.jellyfin-v12-layout #slides-container .plot-container,
+.jellyfin-v12-layout #slides-container .button-container,
+.jellyfin-v12-layout #slides-container .dots-container,
+.jellyfin-v12-layout #slides-container .arrow,
+.jellyfin-v12-layout #slides-container .volume-toggle,
+.jellyfin-v12-layout #slides-container .pause-button {
+  z-index: 8;
+}
+
+.jellyfin-v12-layout #slides-container .plot-container.with-video {
+  width: min(34rem, 34vw);
+}
+
+.jellyfin-v12-layout #slides-container .button-container {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.jellyfin-v12-layout #slides-container .detail-button {
+  order: 1;
+}
+
+.jellyfin-v12-layout #slides-container .play-button {
+  order: 2;
+}
+
+.jellyfin-v12-layout #slides-container .favorite-button {
+  order: 3;
+}
+
+.jellyfin-v12-layout #slides-container .play-button,
+.jellyfin-v12-layout #slides-container .detail-button,
+.jellyfin-v12-layout #slides-container .favorite-button {
+  min-width: 0;
+  height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / 0.13);
+  border-radius: 999px;
+  background: rgb(18 24 33 / 0.76);
+  color: rgb(255 255 255 / 0.9);
+  box-shadow:
+    0 0.75rem 1.6rem rgb(0 0 0 / 0.28),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.jellyfin-v12-layout #slides-container .play-button {
+  padding: 0 1.15rem;
+  background: rgb(0 164 220 / 0.92);
+  border-color: rgb(120 218 255 / 0.45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.jellyfin-v12-layout #slides-container .detail-button,
+.jellyfin-v12-layout #slides-container .favorite-button {
+  width: 2.75rem;
+  color: rgb(255 255 255 / 0.86);
+}
+
+.jellyfin-v12-layout #slides-container .favorite-button.favorited {
+  color: rgb(255 118 139);
+}
+
+.jellyfin-v12-layout #slides-container .play-button::before,
+.jellyfin-v12-layout #slides-container .detail-button::before,
+.jellyfin-v12-layout #slides-container .favorite-button::before,
+.jellyfin-v12-layout #slides-container .favorite-button.favorited::before {
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.jellyfin-v12-layout #slides-container .play-button:hover,
+.jellyfin-v12-layout #slides-container .detail-button:hover,
+.jellyfin-v12-layout #slides-container .favorite-button:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: rgb(255 255 255 / 0.26);
+  background: rgb(31 40 53 / 0.86);
+}
+
+.jellyfin-v12-layout #slides-container .play-button:hover {
+  background: rgb(0 180 240 / 0.98);
+}
+
+@media only screen and (min-width: 768px) {
+  .jellyfin-v12-layout #slides-container .backdrop.with-video {
+    transform: translateX(clamp(-14rem, -13vw, -7rem)) scale(1.04);
+    transform-origin: left center;
+    object-position: 64% center;
+  }
+
+  .jellyfin-v12-layout #slides-container .backdrop.with-video.animate {
+    animation: mb-v12-poster-yield-to-trailer 950ms cubic-bezier(0.2, 0.82, 0.22, 1) forwards;
+  }
+
+  .jellyfin-v12-layout #slides-container .button-container {
+    transform: none;
+    transform-origin: left center;
+  }
+
+  .jellyfin-v12-layout #slides-container .play-button {
+    order: 2;
+  }
+
+  .jellyfin-v12-layout #slides-container .detail-button {
+    order: 1;
+  }
+
+  .jellyfin-v12-layout #slides-container .favorite-button {
+    order: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jellyfin-v12-layout #slides-container .backdrop.with-video.animate {
+    animation: none;
+  }
+
+  .jellyfin-v12-layout #slides-container .backdrop.with-video {
+    transition: none;
+  }
+}
+
+.jellyfin-v12-layout .homeSectionsContainer {
+  top: var(--mb-v12-home-row-top);
+  z-index: 6;
+}
+
+.jellyfin-v12-layout header.MuiAppBar-root {
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.34) 68%, rgb(0 0 0 / 0)) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+@media only screen and (max-height: 767px) and (orientation: landscape) {
+  .jellyfin-v12-layout {
+    --mb-v12-home-row-top: max(clamp(31rem, calc(50vh + 11rem), 40rem), var(--mb-v12-content-floor));
+  }
+
+}
+
+@media only screen and (max-width: 767px) and (orientation: portrait) {
+  .jellyfin-v12-layout {
+    --mb-v12-content-left: 50%;
+    --mb-v12-home-row-top: 72vh;
+    --mb-v12-bottom-fade-mask: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 54%,
+      rgb(0 0 0 / 0.78) 68%,
+      rgb(0 0 0 / 0.34) 84%,
+      transparent 100%
+    );
+  }
+
+  .jellyfin-v12-layout #slides-container {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100vw;
+    height: 86vh;
+  }
+
+  .jellyfin-v12-layout #slides-container .button-container {
+    top: calc(50% + 25vh);
+    z-index: 12;
+    gap: 0.65rem;
+  }
+
+  .jellyfin-v12-layout #slides-container .play-button,
+  .jellyfin-v12-layout #slides-container .detail-button,
+  .jellyfin-v12-layout #slides-container .favorite-button {
+    height: 2.9rem;
+    border-color: rgb(255 255 255 / 0.18);
+    background: rgb(21 28 38 / 0.88);
+    box-shadow:
+      0 0.65rem 1.4rem rgb(0 0 0 / 0.34),
+      inset 0 1px 0 rgb(255 255 255 / 0.14);
+  }
+
+  .jellyfin-v12-layout #slides-container .play-button {
+    padding: 0 1rem;
+    background: rgb(0 164 220 / 0.96);
+    border-color: rgb(124 224 255 / 0.55);
+    font-size: 0.9rem;
+  }
+
+  .jellyfin-v12-layout #slides-container .detail-button,
+  .jellyfin-v12-layout #slides-container .favorite-button {
+    width: 2.9rem;
+    color: rgb(255 255 255 / 0.92);
+  }
+
+  .jellyfin-v12-layout #slides-container .video-container {
+    display: none !important;
+  }
+}
