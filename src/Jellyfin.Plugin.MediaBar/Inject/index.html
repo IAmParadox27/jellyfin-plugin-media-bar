@@ -59,6 +59,9 @@
                 } else {
                     window.slideshowPure.CONFIG.syncPageBackdrop = false; // Default off
                 }
+                if (config.MaxOfficialRating) {
+                    window.slideshowPure.CONFIG.maxOfficialRating = config.MaxOfficialRating;
+                }
                 window.slideshowPure.CONFIG.slideAnimationEnabled = config.SlideAnimationEnabled;
             }
         };
