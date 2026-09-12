@@ -165,6 +165,12 @@
                         </label>
                         <div class="fieldDescription">Sync the page backdrop with the media bar slide?</div>
                     </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtMaxOfficialRating">Max Official Rating</label>
+                        <label class="inputLabel inputLabel-float inputLabelUnfocused" for="txtMaxOfficialRating"></label>
+                        <input id="txtMaxOfficialRating" type="text" is="emby-input" class="emby-input" data-id="txtMaxOfficialRating" />
+                        <div class="fieldDescription">Excludes items rated above this from the randomly populated media bar (e.g. <code>PG-13</code>). Leave blank for no limit. Only applies when randomly populating; has no effect on a manually curated Avatars Playlist.</div>
+                    </div>
                 </div>
             </div>
             <br />
@@ -234,6 +240,7 @@
                             SlideAnimationEnabled: document.querySelector("[data-id=chkSlideAnimationEnabled]").checked,
                             EnableTrailers: document.querySelector("[data-id=chkEnableTrailers]").checked,
                             SyncPageBackdrop: document.querySelector("[data-id=chkSyncPageBackdrop]").checked,
+                            MaxOfficialRating: document.querySelector("[data-id=txtMaxOfficialRating]").value,
                         }
                     };
 
@@ -269,6 +276,7 @@
                             document.querySelector("[data-id=numFadeTransitionDuration]").value = config.WebConfig.FadeTransitionDuration;
                             document.querySelector("[data-id=chkSlideAnimationEnabled]").checked = config.WebConfig.SlideAnimationEnabled;
                             document.querySelector("[data-id=chkEnableTrailers]").checked = config.WebConfig.EnableTrailers;
+                            document.querySelector("[data-id=txtMaxOfficialRating]").value = config.WebConfig.MaxOfficialRating;
                         })
                         .catch(function (error) {
                             console.error(error);

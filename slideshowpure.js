@@ -38,6 +38,7 @@ const CONFIG = {
   ],
   syncPageBackdrop: true,
   youtubeApiLoadTimeoutMs: 8000,
+  maxOfficialRating: "",
 };
 
 // State management
@@ -916,8 +917,12 @@ const ApiUtils = {
 
       console.log("Fetching random items from server...");
 
+      const maxOfficialRatingParam = CONFIG.maxOfficialRating
+        ? `&MaxOfficialRating=${encodeURIComponent(CONFIG.maxOfficialRating)}`
+        : "";
+
       const response = await fetch(
-        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&sortBy=Random&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id,ImageTags,RemoteTrailers`,
+        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&sortBy=Random&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id,ImageTags,RemoteTrailers${maxOfficialRatingParam}`,
         {
           headers: this.getAuthHeaders(),
         },
