@@ -1,18 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <JellyfinVersion>10.11.2</JellyfinVersion>
+        <JellyfinVersion>12.0.0</JellyfinVersion>
         <JellyfinNugetVersion Condition="!$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
         <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11'))">$(JellyfinVersion)</JellyfinNugetVersion>
-        <JellyfinNugetVersion Condition="'$(JellyfinVersion)' == '10.11.1'">10.11.0</JellyfinNugetVersion>
-        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('10.11.0'))">10.11.0</JellyfinNugetVersion>
         <JellyfinNugetVersion Condition="'$(JellyfinVersion)' == '10.11.10'">10.11.9</JellyfinNugetVersion>
+        <JellyfinNugetVersion Condition="$(JellyfinVersion.StartsWith('12.0.0'))">12.0.0</JellyfinNugetVersion>
         <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
-        <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
+        <TargetFramework Condition="$(JellyfinVersion.StartsWith('12.'))">net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-        <Version>2.4.0.0</Version>
+        <Version>3.0.0.0</Version>
     </PropertyGroup>
 
     <ItemGroup>
@@ -24,17 +23,7 @@
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
     
-    <!-- 10.10.7 Specific Code from non 10.10.7 builds -->
-    <ItemGroup Condition="'$(JellyfinVersion)' != '10.10.7'">
-        <None Include="JellyfinVersionSpecific/10.10.7/*.cs" />
-        <Compile Remove="JellyfinVersionSpecific/10.10.7/*.cs" />
-    </ItemGroup>
-
     <!-- Remove 10.11.0 Specific Code from non 10.11.0 builds -->
-    <ItemGroup Condition="'$(JellyfinVersion)' != '10.11.0'">
-        <None Include="JellyfinVersionSpecific/10.11.0/*.cs" />
-        <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
-    </ItemGroup>
     <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) OR ('$(JellyfinNugetVersion)' == '10.11.9') OR ('$(JellyfinNugetVersion)' == '10.11.11')">
         <None Include="JellyfinVersionSpecific/10.11/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11/*.cs" />
@@ -43,6 +32,26 @@
         <None Include="JellyfinVersionSpecific/10.11.9/*.cs" />
         <Compile Remove="JellyfinVersionSpecific/10.11.9/*.cs" />
     </ItemGroup>
+
+    <ItemGroup Condition="!$(JellyfinVersion.StartsWith('12.0'))">
+        <None Include="JellyfinVersionSpecific/12.0/*.cs" />
+        <Compile Remove="JellyfinVersionSpecific/12.0/*.cs" />
+    </ItemGroup>
+    
+    <Target Name="GenerateAssemblyMetadata_JellyfinVersion" BeforeTargets="BeforeCompile">
+        <ItemGroup>
+            <AssemblyAttribute Include="Jellyfin.Plugin.MediaBar.Attributes.JellyfinVersionAttribute">
+                <_Parameter1>$(JellyfinVersion)</_Parameter1>
+            </AssemblyAttribute>
+        </ItemGroup>
+        <WriteCodeFragment
+                Language="C#"
+                OutputFile="$(IntermediateOutputPath)AssemblyMetadata.g.cs"
+                AssemblyAttributes="@(AssemblyAttribute)" />
+        <ItemGroup>
+            <Compile Include="$(IntermediateOutputPath)AssemblyMetadata.g.cs" />
+        </ItemGroup>
+    </Target>
 
     <ItemGroup>
       <EmbeddedResource Include="Configuration\config.html" />
@@ -59,7 +68,8 @@
     </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar')">
+        <Exec Condition="$(JellyfinVersion.StartsWith('12.0'))"  Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_12\plugins\MediaBar&quot; /y" />
         <Exec Condition="$(JellyfinVersion.StartsWith('10.11'))" Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_11\plugins\MediaBar&quot; /y" />
-        <Exec Condition="'$(JellyfinVersion)' == '10.10.7'"     Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_10_7\plugins\MediaBar&quot; /y" />
+        <Exec Condition="'$(JellyfinVersion)' == '10.10.7'"      Command="xcopy $(TargetDir) &quot;C:\ProgramData\Jellyfin\Server_10_10_7\plugins\MediaBar&quot; /y" />
     </Target>
 </Project>

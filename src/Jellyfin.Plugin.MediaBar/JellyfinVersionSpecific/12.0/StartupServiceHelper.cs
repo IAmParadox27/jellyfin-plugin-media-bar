@@ -8,7 +8,7 @@ namespace Jellyfin.Plugin.MediaBar.JellyfinVersionSpecific
         {
             yield return new TaskTriggerInfo()
             {
-                Type = TaskTriggerInfo.TriggerStartup
+                Type = TaskTriggerInfoType.StartupTrigger
             };
         }
     }
