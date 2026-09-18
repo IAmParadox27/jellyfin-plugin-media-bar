@@ -1294,47 +1294,76 @@ const LocalizationUtils = {
 
         const chunkText = await response.text();
 
-        const replaceEscaped = (text) =>
-          text
-            .replace(/\\"/g, '"')
-            .replace(/\\n/g, "\n")
-            .replace(/\\\\/g, "\\")
-            .replace(/\\'/g, "'");
-        try {
-          const START = /^(.*)JSON\.parse\(['"]/gms;
-          const END = /['"]?\)?\s*}?(\r\n|\r|\n)?}?]?\)?;(\r\n|\r|\n)?$/gms;
+        // The chunk wraps the catalogue in JSON.parse('<js string literal>').
+        // Extract the JavaScript string literal without treating escaped quotes
+        // as terminators, then decode its escapes exactly once before JSON.parse.
+        const marker = "JSON.parse(";
+        const markerIndex = chunkText.indexOf(marker);
 
-          const jsonString = replaceEscaped(
-            chunkText.replace(START, "").replace(END, ""),
+        if (markerIndex === -1) {
+          throw new Error("Translation chunk has no JSON.parse() payload");
+        }
+
+        let cursor = markerIndex + marker.length;
+        while (/\s/.test(chunkText[cursor] || "")) cursor += 1;
+
+        const quote = chunkText[cursor];
+        if (quote !== '"' && quote !== "'") {
+          throw new Error(
+            "Translation JSON.parse() payload is not a string literal",
           );
-          this.translations[locale] = JSON.parse(jsonString);
-          return;
-        } catch (e) {
-          console.error("Failed to parse JSON from standard extraction.");
         }
 
-        let jsonMatch = chunkText.match(/JSON\.parse\(['"](.*?)['"]\)/);
-        if (jsonMatch) {
-          try {
-            const jsonString = replaceEscaped(jsonMatch[1]);
-            this.translations[locale] = JSON.parse(jsonString);
-            return;
-          } catch (e) {
-            console.error("Failed to parse JSON from direct extraction.");
+        cursor += 1;
+
+        let literalBody = "";
+        let closed = false;
+
+        for (; cursor < chunkText.length; cursor += 1) {
+          const char = chunkText[cursor];
+
+          if (char === "\\") {
+            if (cursor + 1 >= chunkText.length) break;
+
+            literalBody += char + chunkText[cursor + 1];
+            cursor += 1;
+            continue;
           }
+
+          if (char === quote) {
+            closed = true;
+            break;
+          }
+
+          literalBody += char;
         }
 
-        const jsonStart = chunkText.indexOf("{");
-        const jsonEnd = chunkText.lastIndexOf("}") + 1;
-        if (jsonStart !== -1 && jsonEnd > jsonStart) {
-          const jsonString = chunkText.substring(jsonStart, jsonEnd);
-          try {
-            this.translations[locale] = JSON.parse(jsonString);
-            return;
-          } catch (e) {
-            console.error("Failed to parse JSON from chunk:", e);
-          }
+        if (!closed) {
+          throw new Error(
+            "Translation JSON.parse() string literal is unterminated",
+          );
         }
+
+        const jsonString = literalBody.replace(
+          /\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g,
+          (_, esc) => {
+            if (esc[0] === "u" || esc[0] === "x") {
+              return String.fromCharCode(parseInt(esc.slice(1), 16));
+            }
+
+            return {
+              n: "\n",
+              r: "\r",
+              t: "\t",
+              b: "\b",
+              f: "\f",
+              v: "\v",
+              0: "\0",
+            }[esc] ?? esc;
+          },
+        );
+
+        this.translations[locale] = JSON.parse(jsonString);
       } catch (error) {
         console.error("Error loading translations:", error);
       } finally {
