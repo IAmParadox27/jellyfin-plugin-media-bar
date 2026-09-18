@@ -3774,6 +3774,8 @@ const SlideshowManager = {
 
       this.createPaginationDots();
 
+      await this.updateCurrentSlide(STATE.slideshow.resumeIndex || 0);
+
       STATE.slideshow.slideInterval = new SlideTimer(() => {
         if (
           !STATE.slideshow.isPaused &&
@@ -3783,10 +3785,6 @@ const SlideshowManager = {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
-      STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
-
-      await this.updateCurrentSlide(STATE.slideshow.resumeIndex || 0);
     } catch (error) {
       console.error("Error loading slideshow data:", error);
     } finally {
