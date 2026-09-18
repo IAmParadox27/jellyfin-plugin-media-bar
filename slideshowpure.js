@@ -732,10 +732,12 @@ const resetSlideshowState = () => {
 
   PageBackdrop.clear();
 
-  const container = document.getElementById("slides-container");
+  const container =
+    document.getElementById("slides-container") || SlideUtils.slidesContainer;
   if (container) {
     container.remove();
   }
+  SlideUtils.slidesContainer = null;
 
   STATE.slideshow.hasInitialized = false;
   STATE.slideshow.isTransitioning = false;
@@ -866,6 +868,7 @@ const watchForSignOut = () => {
 bootstrap();
 
 const SlideUtils = {
+  slidesContainer: null,
 
   shuffleArray(array) {
     const newArray = [...array];
@@ -950,9 +953,30 @@ const SlideUtils = {
   },
 
   getOrCreateSlidesContainer() {
-    let container = document.getElementById("slides-container");
+    let container =
+      document.getElementById("slides-container") || this.slidesContainer;
+
     if (!container) {
       container = this.createElement("div", { id: "slides-container" });
+    }
+
+    this.slidesContainer = container;
+
+    const reactRoot = document.getElementById("reactRoot");
+    const homeTab = document.getElementById("homeTab");
+    const isJellyfin12Shell = Boolean(
+      reactRoot &&
+        reactRoot.getBoundingClientRect().height >=
+          Math.min(window.innerHeight * 0.5, 320),
+    );
+
+    if (
+      isJellyfin12Shell &&
+      homeTab &&
+      container.parentElement !== homeTab
+    ) {
+      homeTab.prepend(container);
+    } else if (!container.parentElement) {
       document.body.appendChild(container);
     }
 
@@ -1922,7 +1946,11 @@ const VisibilityObserver = {
   },
 
   updateVisibility() {
-    const container = document.getElementById("slides-container");
+    const homeTab = document.getElementById("homeTab");
+    const container = homeTab
+      ? SlideUtils.getOrCreateSlidesContainer()
+      : document.getElementById("slides-container") ||
+        SlideUtils.slidesContainer;
     if (!container) return;
 
     const activeTab = document.querySelector(".emby-tab-button-active");
