@@ -1620,6 +1620,15 @@ const ApiUtils = {
     }
   },
 
+  async fetchMediaViews() {
+    const views = await this.fetchViews();
+
+    return views.filter((view) => {
+      const collectionType = String(view.CollectionType || "").toLowerCase();
+      return collectionType === "movies" || collectionType === "tvshows";
+    });
+  },
+
   async resolveLibraries(names) {
     if (!names.length) return [];
 
@@ -1658,7 +1667,9 @@ const ApiUtils = {
       const movieQuota = Math.max(0, CONFIG.maxMovies || 0);
       const seriesQuota = Math.max(0, CONFIG.maxSeries || 0);
 
-      let libraries = await this.resolveLibraries(CONFIG.libraries);
+      let libraries = CONFIG.libraries.length
+        ? await this.resolveLibraries(CONFIG.libraries)
+        : await this.fetchMediaViews();
 
       const trailerLibraries = await this.resolveLibraries(
         CONFIG.trailerLibraries,
