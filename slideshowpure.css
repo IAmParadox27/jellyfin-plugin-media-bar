@@ -1839,6 +1839,16 @@
   font-size: 1.25rem;
 }
 
+#slides-container .material-icons.chevron_left::before {
+  content: "chevron_left" !important;
+  font-family: "Material Icons" !important;
+}
+
+#slides-container .material-icons.chevron_right::before {
+  content: "chevron_right" !important;
+  font-family: "Material Icons" !important;
+}
+
 #slides-container .arrow:hover {
   background: rgb(10 12 18 / 0.72);
   border-color: rgb(255 255 255 / 0.6);
