@@ -64,6 +64,8 @@ const CONFIG = {
   syncPageBackdrop: false,
   // ms to wait for the YouTube iframe API before giving up and carrying on.
   youtubeApiLoadTimeoutMs: 8000,
+  // highest official rating (e.g. "PG-13") allowed in the randomly populated bar. Empty = no limit.
+  maxOfficialRating: "",
 
   // ms the backdrop is shown before the trailer starts. 0 = immediately.
   trailerStartDelayMs: 3500,
@@ -1543,11 +1545,16 @@ const ApiUtils = {
   },
 
   async fetchItemPage(types, limit, library = null) {
+    const maxOfficialRatingParam = CONFIG.maxOfficialRating
+      ? `&MaxOfficialRating=${encodeURIComponent(CONFIG.maxOfficialRating)}`
+      : "";
+
     const response = await fetch(
       `${STATE.jellyfinData.serverAddress}/Items` +
         `?IncludeItemTypes=${types}&Recursive=true&hasOverview=true` +
         `&imageTypes=Logo,Backdrop&SortBy=Random&isPlayed=False` +
         `&Limit=${limit}&${this.itemFieldsQuery()}` +
+        maxOfficialRatingParam +
         (library ? `&ParentId=${encodeURIComponent(library.Id)}` : ""),
       {
         headers: this.getAuthHeaders(),
