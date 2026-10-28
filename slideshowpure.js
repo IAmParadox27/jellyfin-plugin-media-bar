@@ -2009,7 +2009,9 @@ const PageBackdrop = {
   getSurface() {
     const bg = document.querySelector(".backgroundContainer");
     if (!bg) return null;
-    if (document.querySelector(".backdropContainer .backdropImage")) return null;
+    // Jellyfin 12.2+ always renders two empty slots, so only count ones in use
+    const inUse = `.backdropContainer .displayingBackdropImage, .backdropContainer .${this.LAYER_CLASS}`;
+    if (document.querySelector(inUse)) return null;
     return bg;
   },
 
@@ -2068,7 +2070,13 @@ const PageBackdrop = {
     const layers = container.querySelectorAll(".backdropImage");
     layers.forEach((layer) => {
       if (!layer.classList.contains(this.LAYER_CLASS)) {
-        layer.remove();
+        // Jellyfin 12.2+ looks up its #backdropImage0/1 slots by id, so hide
+        // those instead of deleting them
+        if (layer.id.startsWith("backdropImage")) {
+          layer.style.display = "none";
+        } else {
+          layer.remove();
+        }
       }
     });
 
@@ -2153,6 +2161,10 @@ const PageBackdrop = {
   clear() {
     this.stopObserver();
     this.currentItemId = null;
+
+    document
+      .querySelectorAll('.backdropContainer [id^="backdropImage"]')
+      .forEach((slot) => slot.style.removeProperty("display"));
 
     if (this.surface) {
       this.restoreSurface();
