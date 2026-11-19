@@ -20,6 +20,7 @@
         <div style="margin-bottom: 1.5em;">
             <button class="jellyfin-tab-button active" data-tab="general" style="background: none; border: none; color: #fff; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid #fff; padding: 0.5em 1em;"><h3>General Settings</h3></button>
             <button class="jellyfin-tab-button" data-tab="web-config" style="background: none; border: none; color: #ccc; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid transparent; padding: 0.5em 1em;"><h3>Web Config Settings</h3></button>
+            <button class="jellyfin-tab-button" data-tab="seer-config" style="background: none; border: none; color: #ccc; cursor: pointer; transition: color 0.3s, border-bottom 0.3s; border-bottom: 2px solid transparent; padding: 0.5em 1em;"><h3>Seer</h3></button>
         </div>
 
         <form class="mediaBarConfigurationForm">
@@ -167,6 +168,74 @@
                     </div>
                 </div>
             </div>
+            <div id="seer-config" class="jellyfin-tab-content" style="display: none;">
+                <div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkSeerEnabled" is="emby-checkbox" class="emby-checkbox" data-id="chkSeerEnabled" />
+                            <span class="checkboxLabel">Mix Seer suggestions into the media bar</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Adds titles from Seer's discover lists to the bar, tagged "From Seer". Artwork loads from TMDB in the browser; nothing is downloaded to the server.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtSeerUrl">Seer server URL</label>
+                        <input id="txtSeerUrl" type="text" is="emby-input" class="emby-input" data-id="txtSeerUrl" />
+                        <div class="fieldDescription">How the Jellyfin <em>server</em> reaches Seer. When both run in Docker Desktop, use <code>http://host.docker.internal:5055</code>; <code>localhost</code> would point at the Jellyfin container itself.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtSeerApiKey">Seer API key</label>
+                        <input id="txtSeerApiKey" type="password" autocomplete="off" is="emby-input" class="emby-input" data-id="txtSeerApiKey" />
+                        <div class="fieldDescription">From Seer: Settings → General → API Key. Stored on the Jellyfin server only and never sent to browsers.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtSeerPublicUrl">Seer link URL</label>
+                        <input id="txtSeerPublicUrl" type="text" is="emby-input" class="emby-input" data-id="txtSeerPublicUrl" />
+                        <div class="fieldDescription">Where the "View in Seer" button sends viewers, as their browser sees it (e.g. <code>http://localhost:5055</code>). Leave empty to hide the button.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="numSeerMaxItems">Seer slides</label>
+                        <input id="numSeerMaxItems" type="number" min="0" max="50" is="emby-input" class="emby-input" data-id="numSeerMaxItems" />
+                        <div class="fieldDescription">How many Seer titles to mix in with library items (0–50). They are shuffled together with your library picks.</div>
+                    </div>
+                    <div class="verticalSection" style="margin-bottom: 1.5em;">
+                        <h3 class="checkboxListLabel">Seer lists to draw from</h3>
+                        <div class="checkboxList">
+                            <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" is="emby-checkbox" class="emby-checkbox seerCategory" value="trending" /><span class="checkboxLabel">Trending</span><span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label></div>
+                            <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" is="emby-checkbox" class="emby-checkbox seerCategory" value="movies" /><span class="checkboxLabel">Popular movies</span><span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label></div>
+                            <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" is="emby-checkbox" class="emby-checkbox seerCategory" value="tv" /><span class="checkboxLabel">Popular series</span><span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label></div>
+                            <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" is="emby-checkbox" class="emby-checkbox seerCategory" value="upcoming-movies" /><span class="checkboxLabel">Upcoming movies</span><span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label></div>
+                            <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" is="emby-checkbox" class="emby-checkbox seerCategory" value="upcoming-tv" /><span class="checkboxLabel">Upcoming series</span><span class="checkboxOutline"><span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span></span></label></div>
+                        </div>
+                        <div class="fieldDescription">None ticked means Trending.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkSeerHideAvailable" is="emby-checkbox" class="emby-checkbox" data-id="chkSeerHideAvailable" />
+                            <span class="checkboxLabel">Skip titles you already have</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Leaves out anything Seer reports as available or partly available, so a title doesn't appear twice.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input type="checkbox" id="chkSeerAllowRequests" is="emby-checkbox" class="emby-checkbox" data-id="chkSeerAllowRequests" />
+                            <span class="checkboxLabel">Let viewers request titles from the bar</span>
+                            <span class="checkboxOutline">
+                                <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                <span class="material-icons checkboxIcon checkboxIcon-unchecked " aria-hidden="true"></span>
+                            </span>
+                        </label>
+                        <div class="fieldDescription">Adds a Request button to Seer slides. Each request is filed as the viewer's own linked Seer account, so their Seer permissions, quotas and approval rules still apply.</div>
+                    </div>
+                </div>
+            </div>
             <br />
             <button id="saveConfig" is="emby-button" type="submit" class="emby-button raised button-submit block">
                 <span>Save</span>
@@ -234,6 +303,16 @@
                             SlideAnimationEnabled: document.querySelector("[data-id=chkSlideAnimationEnabled]").checked,
                             EnableTrailers: document.querySelector("[data-id=chkEnableTrailers]").checked,
                             SyncPageBackdrop: document.querySelector("[data-id=chkSyncPageBackdrop]").checked,
+                        },
+                        Seer: {
+                            Enabled: document.querySelector("[data-id=chkSeerEnabled]").checked,
+                            Url: document.querySelector("[data-id=txtSeerUrl]").value.trim(),
+                            ApiKey: document.querySelector("[data-id=txtSeerApiKey]").value.trim(),
+                            PublicUrl: document.querySelector("[data-id=txtSeerPublicUrl]").value.trim(),
+                            MaxItems: parseInt(document.querySelector("[data-id=numSeerMaxItems]").value, 10) || 0,
+                            Categories: Array.from(document.querySelectorAll(".seerCategory:checked")).map(c => c.value).join(","),
+                            HideAvailable: document.querySelector("[data-id=chkSeerHideAvailable]").checked,
+                            AllowRequests: document.querySelector("[data-id=chkSeerAllowRequests]").checked,
                         }
                     };
 
@@ -269,6 +348,17 @@
                             document.querySelector("[data-id=numFadeTransitionDuration]").value = config.WebConfig.FadeTransitionDuration;
                             document.querySelector("[data-id=chkSlideAnimationEnabled]").checked = config.WebConfig.SlideAnimationEnabled;
                             document.querySelector("[data-id=chkEnableTrailers]").checked = config.WebConfig.EnableTrailers;
+
+                            const seer = config.Seer || {};
+                            document.querySelector("[data-id=chkSeerEnabled]").checked = !!seer.Enabled;
+                            document.querySelector("[data-id=txtSeerUrl]").value = seer.Url || "http://host.docker.internal:5055";
+                            document.querySelector("[data-id=txtSeerApiKey]").value = seer.ApiKey || "";
+                            document.querySelector("[data-id=txtSeerPublicUrl]").value = seer.PublicUrl || "";
+                            document.querySelector("[data-id=numSeerMaxItems]").value = seer.MaxItems ?? 10;
+                            const categories = (seer.Categories || "trending").split(",").map(c => c.trim());
+                            document.querySelectorAll(".seerCategory").forEach(c => { c.checked = categories.includes(c.value); });
+                            document.querySelector("[data-id=chkSeerHideAvailable]").checked = seer.HideAvailable !== false;
+                            document.querySelector("[data-id=chkSeerAllowRequests]").checked = seer.AllowRequests !== false;
                         })
                         .catch(function (error) {
                             console.error(error);
