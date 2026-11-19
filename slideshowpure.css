@@ -2243,3 +2243,162 @@
     transition: none;
   }
 }
+
+/* ---- Source tag + Seer slides ------------------------------------------ */
+
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  flex: 0 0 auto;
+  padding: 0.32em 0.8em;
+  border-radius: 999px;
+  font-family: var(--slideshow-font);
+  font-size: clamp(0.68rem, 0.6rem + 0.25vw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: #fff;
+  background: rgb(0 0 0 / 0.45);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+.source-tag::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: #00a4dc; /* Jellyfin blue */
+}
+
+.source-tag.source-seer::before {
+  background: #8b5cf6; /* Seer violet */
+}
+
+/* Seer has no logo art: the title is set in type in the logo's place. */
+.logo.logo-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--slideshow-font);
+  font-size: clamp(2rem, 1.2rem + 3vw, 4.25rem);
+  font-weight: 700;
+  line-height: 1.05;
+  text-wrap: balance;
+  filter: none;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 0.6);
+}
+
+.play-button.seer-button::before {
+  content: "open_in_new";
+  margin-right: 0.35em;
+}
+
+/* Secondary to "View in Seer": glass pill, purple (Seer's colour) on hover.
+   Scoped under #slides-container so Jellyfin/theme button styles can't stack
+   the icon over the text or add margins. */
+#slides-container .seer-request-button {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 50px;
+  margin: 0;
+  padding: 0 1.25em 0 1em;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.45);
+  color: #fff;
+  font-family: var(--slideshow-font);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+  -webkit-tap-highlight-color: #fff0;
+}
+
+#slides-container .seer-request-button:hover:not(:disabled),
+#slides-container .seer-request-button:focus-visible:not(:disabled) {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: #fff;
+}
+
+#slides-container .seer-request-button::before {
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-size: 1.25em;
+  line-height: 1;
+  content: "add";
+}
+
+#slides-container .seer-request-button .request-text {
+  line-height: 1;
+}
+
+#slides-container .seer-request-button[data-state="busy"] {
+  cursor: progress;
+  opacity: 0.8;
+}
+
+#slides-container .seer-request-button[data-state="busy"]::before {
+  content: "hourglass_top";
+}
+
+#slides-container .seer-request-button[data-state="done"] {
+  cursor: default;
+  border-color: rgb(139 92 246 / 0.7);
+}
+
+#slides-container .seer-request-button[data-state="done"]::before {
+  content: "check";
+  color: #a78bfa;
+}
+
+#slides-container .seer-request-button[data-state="error"] {
+  border-color: rgb(255 77 77 / 0.7);
+}
+
+#slides-container .seer-request-button[data-state="error"]::before {
+  content: "error_outline";
+  color: #ff4d4d;
+}
+
+#slides-container .seer-request-button[data-state="error"]:hover::before {
+  color: #fff;
+}
+
+#slides-container .seer-request-button[data-state="error"] .request-text {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#slides-container.layout-plate .seer-request-button {
+  height: var(--plate-control);
+  border-radius: 999px;
+}
+
+#slides-container.layout-marquee .seer-request-button {
+  height: var(--mq-control);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #slides-container .seer-request-button {
+    transition: none !important;
+  }
+}
