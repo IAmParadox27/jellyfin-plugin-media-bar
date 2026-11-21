@@ -40,6 +40,37 @@ namespace Jellyfin.Plugin.MediaBar.Configuration
         public string AvatarsPlaylist { get; set; } = string.Empty;
         
         public WebConfig WebConfig { get; set; } = new WebConfig();
+
+        // Seer discovery source. These stay server-side: WebConfig is sent to every
+        // browser, so the API key must never live there.
+        public SeerConfig Seer { get; set; } = new SeerConfig();
+    }
+
+    public class SeerConfig
+    {
+        public bool Enabled { get; set; } = false;
+
+        // Address the Jellyfin *server* uses to reach Seer. From inside a Docker
+        // container, localhost is the container itself, hence host.docker.internal.
+        public string Url { get; set; } = "http://host.docker.internal:5055";
+
+        public string ApiKey { get; set; } = string.Empty;
+
+        // Address the *browser* uses for "View in Seer" links. Empty hides the button.
+        public string PublicUrl { get; set; } = string.Empty;
+
+        // Comma-separated: trending, movies, tv, upcoming-movies, upcoming-tv
+        public string Categories { get; set; } = "trending";
+
+        // Seer slides mixed into the bar alongside library items.
+        public int MaxItems { get; set; } = 10;
+
+        // Drop titles Seer reports as already available (they're in a library anyway).
+        public bool HideAvailable { get; set; } = true;
+
+        // Show a Request button on Seer slides. Requests are filed as the viewer's own
+        // linked Seer account, so Seer's permissions, quotas and approval still apply.
+        public bool AllowRequests { get; set; } = true;
     }
 
     public class WebConfig

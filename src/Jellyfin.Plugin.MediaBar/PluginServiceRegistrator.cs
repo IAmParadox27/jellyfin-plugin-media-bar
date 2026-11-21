@@ -9,6 +9,8 @@ namespace Jellyfin.Plugin.MediaBar
     {
         public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
         {
+            // Singleton so the discover cache is shared across requests.
+            serviceCollection.AddSingleton<SeerService>();
         }
     }
 }
