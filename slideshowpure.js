@@ -38,7 +38,7 @@ const CONFIG = {
   // upper bound on pagination dots. Fewer titles than this show one dot each.
   maxDots: 5,
 
-  // leading slides that must include every item type present. 0 = off (plain proportional shuffle).
+  // leading slides that must include every source present (Movies, Shows, Seer). 0 = off.
   mixTypesInFirst: 3,
   // ms of the crossfade between slides. Must match the CSS transition.
   fadeTransitionDuration: 500,
@@ -894,28 +894,58 @@ const SlideUtils = {
     return newArray;
   },
 
+  // Movies, Shows and Seer suggestions are the three things the bar mixes.
+  sourceKey(item) {
+    return item.Seer ? "seer" : item.Type;
+  },
+
+  // Shuffles while spreading each source across the whole run: the i-th of n
+  // items from a source lands somewhere in slice [i/n, (i+1)/n) of the list.
+  // Random within that, but a plain shuffle's long clumps can't happen.
+  spreadShuffle(items) {
+    const groups = new Map();
+    for (const item of items) {
+      const key = this.sourceKey(item);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+
+    const keyed = [];
+    for (const group of groups.values()) {
+      this.shuffleArray(group).forEach((item, i, all) => {
+        keyed.push({ item, at: (i + Math.random()) / all.length });
+      });
+    }
+    return keyed.sort((a, b) => a.at - b.at).map((entry) => entry.item);
+  },
+
+  randomOrder(items) {
+    return this.mixTypesInHead(this.spreadShuffle(items), CONFIG.mixTypesInFirst);
+  },
+
   mixTypesInHead(items, windowSize) {
     if (!windowSize || items.length <= windowSize) return items;
 
     const result = [...items];
-    const presentTypes = new Set(result.map((item) => item.Type));
+    const presentTypes = new Set(result.map((item) => SlideUtils.sourceKey(item)));
     if (presentTypes.size < 2) return result;
 
     for (const type of presentTypes) {
       const head = result.slice(0, windowSize);
-      if (head.some((item) => item.Type === type)) continue;
+      if (head.some((item) => SlideUtils.sourceKey(item) === type)) continue;
 
       const from = result.findIndex(
-        (item, index) => index >= windowSize && item.Type === type,
+        (item, index) => index >= windowSize && SlideUtils.sourceKey(item) === type,
       );
       if (from === -1) continue;
 
       const counts = {};
       head.forEach((item) => {
-        counts[item.Type] = (counts[item.Type] || 0) + 1;
+        const key = SlideUtils.sourceKey(item);
+        counts[key] = (counts[key] || 0) + 1;
       });
       const spare = head
-        .map((item, index) => (counts[item.Type] > 1 ? index : -1))
+        .map((item, index) => (counts[SlideUtils.sourceKey(item)] > 1 ? index : -1))
         .filter((index) => index !== -1);
       if (!spare.length) break;
 
@@ -1684,8 +1714,10 @@ const ApiUtils = {
       STATE.slideshow.trailerLibraryIds = new Set(
         trailerLibraries.map((view) => view.Id),
       );
-      if (!libraries.length && trailerLibraries.length) {
-        libraries = await this.fetchViews();
+      // Query each media library on its own rather than one pooled query, so
+      // every item carries a LibraryId for its "From your X library" tag.
+      if (!libraries.length) {
+        libraries = (await this.fetchViews()).filter(isMediaLibraryView);
       }
 
       if (!movieQuota && !seriesQuota) {
@@ -1844,6 +1876,137 @@ const ApiUtils = {
     } catch (error) {
       console.error("Error toggling favorite:", error);
     }
+  },
+};
+
+// Libraries worth drawing slides from; skips playlists, collections, music, etc.
+// Mixed-content libraries report no CollectionType.
+const isMediaLibraryView = (view) =>
+  !view.CollectionType ||
+  ["movies", "tvshows", "mixed"].includes(view.CollectionType);
+
+// The small "From …" label on each slide.
+const SourceTags = {
+  forLibraryItem(item) {
+    const view =
+      item.LibraryId &&
+      (STATE.jellyfinData.views || []).find((v) => v.Id === item.LibraryId);
+    return {
+      kind: "library",
+      label: view?.Name ? `From your ${view.Name} library` : "From your library",
+    };
+  },
+
+  forSeerItem(status) {
+    // Seer MediaStatus 2 = pending, 3 = processing: someone already asked for it.
+    const requested = status === 2 || status === 3;
+    return { kind: "seer", label: requested ? "From Seer · Requested" : "From Seer" };
+  },
+};
+
+// Seer suggestions, fetched through the plugin's server-side proxy
+// (MediaBar/Seer/Discover) so the Seer API key never reaches the browser.
+// Artwork comes straight from TMDB's CDN; nothing is downloaded or stored.
+const SeerSource = {
+  TMDB_IMAGE_BASE: "https://image.tmdb.org/t/p",
+  FETCH_TIMEOUT_MS: 5000,
+
+  // Asks the plugin to file a Seer request as the signed-in user's linked Seer
+  // account. Resolves to { ok, status, message }; never throws.
+  async request(item) {
+    const { serverAddress } = STATE.jellyfinData;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(`${serverAddress}/MediaBar/Seer/Request`, {
+        method: "POST",
+        headers: { ...ApiUtils.getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ MediaType: item.Seer.mediaType, TmdbId: item.Seer.tmdbId }),
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => null);
+      return {
+        ok: response.ok && data?.Success === true,
+        status: data?.Status ?? null,
+        message: data?.Message || `Request failed (${response.status})`,
+      };
+    } catch (error) {
+      return { ok: false, status: null, message: "Couldn't reach the server" };
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  async fetchItems() {
+    const { serverAddress, accessToken } = STATE.jellyfinData;
+    if (!serverAddress || !accessToken) return [];
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${serverAddress}/MediaBar/Seer/Discover`, {
+        headers: ApiUtils.getAuthHeaders(),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // 404 = plugin build without the Seer endpoint; stay quiet.
+        if (response.status !== 404) {
+          console.warn(`Slideshow: Seer suggestions failed (${response.status}).`);
+        }
+        return [];
+      }
+
+      const data = await response.json();
+      if (!data?.Enabled || !Array.isArray(data.Items)) return [];
+
+      return data.Items
+        .map((entry) => this.toSlideItem(entry, data.PublicUrl, data.CanRequest === true))
+        .filter(Boolean);
+    } catch (error) {
+      console.warn("Slideshow: Seer suggestions unavailable:", error?.message || error);
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  // Shapes a Seer result like a Jellyfin item so the rest of the bar (shuffle,
+  // spec line, genres, session order) handles it unchanged. `Seer` marks it as
+  // external: no play/favourite, images from TMDB, link out to Seer.
+  toSlideItem(entry, publicUrl, canRequest) {
+    if (!entry?.TmdbId || !entry.BackdropPath) return null;
+
+    const mediaType = entry.MediaType === "tv" ? "tv" : "movie";
+    const image = (size, path) =>
+      path ? `${this.TMDB_IMAGE_BASE}/${size}${path}` : null;
+
+    return {
+      Id: `seer-${mediaType}-${entry.TmdbId}`,
+      Name: entry.Title,
+      Type: mediaType === "tv" ? "Series" : "Movie",
+      Overview: entry.Overview || "",
+      Genres: Array.isArray(entry.Genres) ? entry.Genres : [],
+      CommunityRating:
+        typeof entry.VoteAverage === "number"
+          ? Math.round(entry.VoteAverage * 10) / 10
+          : undefined,
+      PremiereDate: entry.ReleaseDate || undefined,
+      ImageTags: {},
+      BackdropImageTags: [],
+      MediaBarSource: SourceTags.forSeerItem(entry.Status),
+      Seer: {
+        backdropUrl: image("w1280", entry.BackdropPath),
+        posterUrl: image("w500", entry.PosterPath),
+        link: publicUrl ? `${publicUrl}/${mediaType}/${entry.TmdbId}` : null,
+        tmdbId: entry.TmdbId,
+        mediaType,
+        status: entry.Status ?? null,
+        canRequest,
+      },
+    };
   },
 };
 
@@ -2172,6 +2335,12 @@ const PageBackdrop = {
 const SlideCreator = {
 
   buildImageUrl(item, imageType, index, serverAddress, quality) {
+    if (item.Seer) {
+      if (imageType === "Backdrop") return item.Seer.backdropUrl;
+      if (imageType === "Primary") return item.Seer.posterUrl;
+      return null;
+    }
+
     const itemId = item.Id;
     let tag = null;
 
@@ -2362,12 +2531,19 @@ const SlideCreator = {
 
     backdropContainer.append(backdrop, backdropOverlay);
 
-    const logo = SlideUtils.createElement("img", {
-      className: "logo high-quality",
-      src: this.buildImageUrl(item, "Logo", undefined, serverAddress, 40),
-      alt: item.Name,
-      loading: "eager",
-    });
+    // Seer gives no logo art, so its slides set the title in type instead.
+    const logo = item.Seer
+      ? SlideUtils.createElement(
+          "div",
+          { className: "logo logo-text", role: "heading", "aria-level": "2" },
+          item.Name,
+        )
+      : SlideUtils.createElement("img", {
+          className: "logo high-quality",
+          src: this.buildImageUrl(item, "Logo", undefined, serverAddress, 40),
+          alt: item.Name,
+          loading: "eager",
+        });
 
     const logoContainer = SlideUtils.createElement("div", {
       className: "logo-container",
@@ -2396,7 +2572,7 @@ const SlideCreator = {
     const posterContainer = SlideUtils.createElement("div", {
       className: "poster-container",
     });
-    if (item.ImageTags && item.ImageTags.Primary) {
+    if ((item.ImageTags && item.ImageTags.Primary) || item.Seer?.posterUrl) {
       const poster = SlideUtils.createElement("img", {
         className: "poster high-quality",
         src: this.buildImageUrl(item, "Primary", undefined, serverAddress, 70),
@@ -2441,29 +2617,38 @@ const SlideCreator = {
       className: "button-container",
     });
 
-    const playButton = this.createPlayButton(itemId);
-    const detailButton = this.createDetailButton(itemId);
-    const favoriteButton = this.createFavoriteButton(item);
-
-    detailButton.appendChild(
-      SlideUtils.createElement(
-        "span",
-        { className: "action-label" },
-        LocalizationUtils.getLocalizedString("Details", "Details"),
-      ),
-    );
-    favoriteButton.appendChild(
-      SlideUtils.createElement(
-        "span",
-        { className: "action-label" },
-        LocalizationUtils.getLocalizedString("Favorite", "Favorite"),
-      ),
-    );
-
-    if (isMarqueeLayout() || isPlateLayout()) {
-      buttonContainer.append(playButton, detailButton, favoriteButton);
+    if (item.Seer) {
+      // Not in Jellyfin, so nothing to play or favourite; offer Seer instead.
+      // "View in Seer" keeps the play-button role (Enter on the bar), so a stray
+      // keypress opens a page rather than filing a request.
+      if (item.Seer.link) buttonContainer.append(this.createSeerButton(item.Seer.link));
+      if (item.Seer.canRequest) buttonContainer.append(this.createSeerRequestButton(item));
+      if (!buttonContainer.childElementCount) buttonContainer.style.display = "none";
     } else {
-      buttonContainer.append(detailButton, playButton, favoriteButton);
+      const playButton = this.createPlayButton(itemId);
+      const detailButton = this.createDetailButton(itemId);
+      const favoriteButton = this.createFavoriteButton(item);
+
+      detailButton.appendChild(
+        SlideUtils.createElement(
+          "span",
+          { className: "action-label" },
+          LocalizationUtils.getLocalizedString("Details", "Details"),
+        ),
+      );
+      favoriteButton.appendChild(
+        SlideUtils.createElement(
+          "span",
+          { className: "action-label" },
+          LocalizationUtils.getLocalizedString("Favorite", "Favorite"),
+        ),
+      );
+
+      if (isMarqueeLayout() || isPlateLayout()) {
+        buttonContainer.append(playButton, detailButton, favoriteButton);
+      } else {
+        buttonContainer.append(detailButton, playButton, favoriteButton);
+      }
     }
 
     const content = SlideUtils.createElement("div", {
@@ -2512,6 +2697,10 @@ const SlideCreator = {
         buttonContainer,
       );
     }
+
+    // Every layout has the logo, so the tag always sits just above the title.
+    const sourceTag = this.createSourceTag(item);
+    if (sourceTag) content.insertBefore(sourceTag, logoContainer);
 
     slide.append(backdropContainer);
 
@@ -2817,6 +3006,78 @@ const SlideCreator = {
         LocalizationUtils.getLocalizedString("Play", "Play"),
       ),
     );
+
+    return button;
+  },
+
+  createSourceTag(item) {
+    const source = item.MediaBarSource;
+    if (!source?.label) return null;
+    return SlideUtils.createElement(
+      "div",
+      { className: `source-tag source-${source.kind}` },
+      source.label,
+    );
+  },
+
+  // Styled as the primary (play) button so Enter on the bar opens it.
+  createSeerButton(link) {
+    const button = SlideUtils.createElement("button", {
+      className: "detailButton btnPlay play-button seer-button",
+      tabIndex: "0",
+      onclick: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(link, "_blank", "noopener");
+      },
+    });
+    button.appendChild(
+      SlideUtils.createElement("span", { className: "play-text" }, "View in Seer"),
+    );
+    return button;
+  },
+
+  createSeerRequestButton(item) {
+    const label = SlideUtils.createElement("span", { className: "request-text" });
+    const button = SlideUtils.createElement("button", {
+      className: "seer-request-button",
+      tabIndex: "0",
+    });
+    button.appendChild(label);
+
+    const setState = (state, text) => {
+      button.dataset.state = state;
+      label.textContent = text;
+      button.disabled = state === "busy" || state === "done";
+      button.setAttribute("aria-label", text);
+      button.title = state === "error" ? text : "";
+    };
+
+    const status = item.Seer.status;
+    if (status === 2 || status === 3) setState("done", "Requested");
+    else setState("idle", "Request");
+
+    let resetTimer = null;
+    button.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (button.dataset.state === "busy" || button.dataset.state === "done") return;
+
+      clearTimeout(resetTimer);
+      setState("busy", "Requesting…");
+      const result = await SeerSource.request(item);
+
+      if (result.ok) {
+        item.Seer.status = result.status ?? 2;
+        item.MediaBarSource = SourceTags.forSeerItem(item.Seer.status);
+        setState("done", result.message || "Requested");
+        const tag = button.closest(".slide")?.querySelector(".source-tag");
+        if (tag) tag.textContent = item.MediaBarSource.label;
+      } else {
+        setState("error", result.message);
+        resetTimer = setTimeout(() => setState("idle", "Request"), 6000);
+      }
+    });
 
     return button;
   },
@@ -3477,10 +3738,7 @@ const SlideshowManager = {
   applySessionOrder(items) {
 
     if (!CONFIG.rememberOrderForSession) {
-      return SlideUtils.mixTypesInHead(
-        SlideUtils.shuffleArray(items),
-        CONFIG.mixTypesInFirst,
-      );
+      return SlideUtils.randomOrder(items);
     }
 
     try {
@@ -3495,14 +3753,26 @@ const SlideshowManager = {
           .filter(Boolean);
 
         const known = new Set(ordered.map((item) => item.Id));
-        const added = items.filter((item) => !known.has(item.Id));
-        const result = ordered.concat(added);
+        const added = SlideUtils.shuffleArray(
+          items.filter((item) => !known.has(item.Id)),
+        );
+
+        // New titles (Seer sends a fresh sample each load, library picks are
+        // random too) go to random spots in the not-yet-seen part, not all at
+        // the end where they'd play back to back.
+        const resumeAt = Math.min(
+          Math.max(0, stored.index || 0),
+          Math.max(0, ordered.length - 1),
+        );
+        const result = [...ordered];
+        for (const item of added) {
+          const lo = Math.min(resumeAt + 1, result.length);
+          const at = lo + Math.floor(Math.random() * (result.length - lo + 1));
+          result.splice(at, 0, item);
+        }
 
         if (result.length) {
-          STATE.slideshow.resumeIndex = Math.min(
-            Math.max(0, stored.index || 0),
-            result.length - 1,
-          );
+          STATE.slideshow.resumeIndex = Math.min(resumeAt, result.length - 1);
           this.persistSessionOrder(result, STATE.slideshow.resumeIndex);
           return result;
         }
@@ -3511,10 +3781,7 @@ const SlideshowManager = {
 
     }
 
-    const shuffled = SlideUtils.mixTypesInHead(
-      SlideUtils.shuffleArray(items),
-      CONFIG.mixTypesInFirst,
-    );
+    const shuffled = SlideUtils.randomOrder(items);
     this.persistSessionOrder(shuffled, 0);
     return shuffled;
   },
@@ -3798,6 +4065,10 @@ const SlideshowManager = {
 
       mark("items-fetch-start");
 
+      // Runs alongside the library queries; it has its own timeout, so a slow or
+      // offline Seer never holds the bar back for long.
+      const seerItemsPromise = SeerSource.fetchItems();
+
       const listed = await ApiUtils.fetchListEntries();
       let items =
         listed.ids.length || listed.filters.length
@@ -3810,6 +4081,14 @@ const SlideshowManager = {
         );
         items = await ApiUtils.fetchItemsFromServer();
       }
+
+      items.forEach((item) => {
+        item.MediaBarSource = SourceTags.forLibraryItem(item);
+      });
+
+      // applySessionOrder spreads Movies, Shows and Seer titles across the
+      // run, so no source plays in a block.
+      items = items.concat(await seerItemsPromise);
       mark("items-fetched");
 
       items = this.applySessionOrder(items);
@@ -3842,8 +4121,10 @@ const SlideshowManager = {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
+      // Leave the timer stopped but in place: updateCurrentSlide starts it once
+      // the first slide is shown (or a trailer takes over). Nulling it here left
+      // nothing to start, so the progress bar filled and the slide never advanced.
       STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
 
       await this.updateCurrentSlide(STATE.slideshow.resumeIndex || 0);
     } catch (error) {
