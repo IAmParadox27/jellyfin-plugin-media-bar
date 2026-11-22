@@ -19,7 +19,10 @@ namespace Jellyfin.Plugin.MediaBar.Helpers
             IPlaylistManager playlistManager = MediaBarPlugin.Instance.ServiceProvider.GetRequiredService<IPlaylistManager>();
             IUserManager userManager = MediaBarPlugin.Instance.ServiceProvider.GetRequiredService<IUserManager>();
 
-            return AvatarsList(payload, playlistManager, userManager) ?? "";
+            string? contents = AvatarsList(payload, playlistManager, userManager);
+            // A registered virtual file must have content. The client ignores comments,
+            // so an unconfigured list can be represented without inventing any item IDs.
+            return string.IsNullOrWhiteSpace(contents) ? "# No custom list configured.\n" : contents;
         }
         
         private static string? AvatarsList(PatchRequestPayload payload, IPlaylistManager playlistManager, IUserManager userManager)
