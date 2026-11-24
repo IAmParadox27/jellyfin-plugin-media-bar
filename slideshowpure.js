@@ -1289,6 +1289,49 @@ const LocalizationUtils = {
     return null;
   },
 
+  extractJsonParseLiteral(chunkText) {
+    const marker = "JSON.parse(";
+    const markerIndex = chunkText.indexOf(marker);
+    if (markerIndex === -1) return null;
+
+    const quoteIndex = markerIndex + marker.length;
+    const quote = chunkText[quoteIndex];
+    if (quote !== "'" && quote !== '"') return null;
+
+    for (let i = quoteIndex + 1; i < chunkText.length; i++) {
+      if (chunkText[i] === "\\") {
+        i++;
+      } else if (chunkText[i] === quote) {
+        return chunkText.slice(quoteIndex + 1, i);
+      }
+    }
+    return null;
+  },
+
+  decodeJsStringLiteral(literal) {
+    const simpleEscapes = {
+      n: "\n",
+      t: "\t",
+      r: "\r",
+      b: "\b",
+      f: "\f",
+      v: "\v",
+      0: "\0",
+    };
+    return literal.replace(
+      /\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g,
+      (match, esc) => {
+        if (esc.length > 1 && (esc[0] === "u" || esc[0] === "x")) {
+          return String.fromCharCode(parseInt(esc.slice(1), 16));
+        }
+        if (esc === "\r\n" || esc === "\n" || esc === "\r") return "";
+        return Object.prototype.hasOwnProperty.call(simpleEscapes, esc)
+          ? simpleEscapes[esc]
+          : esc;
+      },
+    );
+  },
+
   async loadTranslations(locale) {
     if (this.translations[locale]) return;
     if (this.isLoading[locale]) {
@@ -1311,6 +1354,18 @@ const LocalizationUtils = {
         }
 
         const chunkText = await response.text();
+
+        try {
+          const literal = this.extractJsonParseLiteral(chunkText);
+          if (literal !== null) {
+            this.translations[locale] = JSON.parse(
+              this.decodeJsStringLiteral(literal),
+            );
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse JSON from string literal:", e);
+        }
 
         const replaceEscaped = (text) =>
           text
