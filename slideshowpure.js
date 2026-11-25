@@ -3833,6 +3833,10 @@ const SlideshowManager = {
 
       this.createPaginationDots();
 
+      // Stop any timer left over from a previous load so it can't keep firing
+      // alongside the new one.
+      STATE.slideshow.slideInterval?.stop();
+
       STATE.slideshow.slideInterval = new SlideTimer(() => {
         if (
           !STATE.slideshow.isPaused &&
@@ -3842,8 +3846,9 @@ const SlideshowManager = {
           this.nextSlide();
         }
       }, CONFIG.shuffleInterval);
+      // Keep the timer stopped but assigned: updateCurrentSlide() starts it via
+      // fallbackToTimer(), which does nothing if slideInterval is null.
       STATE.slideshow.slideInterval.stop();
-      STATE.slideshow.slideInterval = null; // Ensure that updateCurrentSlide doesn't restart the timer
 
       await this.updateCurrentSlide(STATE.slideshow.resumeIndex || 0);
     } catch (error) {
